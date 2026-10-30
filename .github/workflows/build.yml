@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew assembleDebug --stacktrace 2>&1 | tee build-output.txt
+          ./gradlew assembleDebug testDebugUnitTest --stacktrace 2>&1 | tee build-output.txt
 
       # Compiler errors and warnings are shown on the run's summary page, so the full log isn't needed.
       - name: Report compiler messages
@@ -38,10 +38,12 @@ jobs:
           failure=$(grep -E -A12 '^\* What went wrong' build-output.txt | head -14 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
           if [ -n "$errors" ]; then echo "::error title=Kotlin errors::$errors"; fi
           if [ -n "$failure" ]; then echo "::error title=Build failure::$failure"; fi
+          tests=$(grep -E -A8 ' FAILED$' build-output.txt | grep -vE '^\s+at ' | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
+          if [ -n "$tests" ]; then echo "::error title=Failed tests::$tests"; fi
           if [ -n "$warnings" ]; then echo "::notice title=Kotlin warnings::$warnings"; fi
           apk=$(ls -l app/build/outputs/apk/debug/*.apk 2>/dev/null | awk '{printf "%.1f MB %s", $5/1048576, $9}')
           kt=$(grep -c 'Task :app:compileDebugKotlin' build-output.txt)
-          echo "::notice title=Build summary::APK ${apk:-missing} · Kotlin compile tasks: $kt · warnings: $(grep -c '^w: ' build-output.txt)"
+          echo "::notice title=Build summary::APK ${apk:-missing} · Kotlin compile tasks: $kt · warnings: $(grep -c '^w: ' build-output.txt) · tests: $(grep -cE ' FAILED$' build-output.txt) failed"
           exit 0
 
       - uses: actions/upload-artifact@v4
