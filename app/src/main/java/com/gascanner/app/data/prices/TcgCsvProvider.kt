@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -138,12 +139,14 @@ class TcgCsvProvider(
         } ?: throw IOException("Grand Archive not found on TCGplayer mirror")
 
         val groups = fetch("$BASE/${category.categoryId}/groups", Envelope.serializer(Group.serializer())).results
-        val limiter = Semaphore(4)
+        val limiter = Semaphore(2)
         val rows = coroutineScope {
             groups.map { group ->
                 async {
                     limiter.withPermit {
-                        runCatching { groupRows(category.categoryId, group) }.getOrDefault(emptyList())
+                        val r = runCatching { groupRows(category.categoryId, group) }.getOrDefault(emptyList())
+                        delay(150)
+                        r
                     }
                 }
             }.awaitAll().flatten()

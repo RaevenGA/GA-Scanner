@@ -81,7 +81,7 @@ data class PriceSourceConfig(
                 id = "zarc",
                 name = "Zarc",
                 kind = PriceSourceKind.SEARCH_LINK,
-                urlTemplate = "https://zarc.pl/search?q={name}",
+                urlTemplate = "https://zarc.pl/pl/searchquery/{name}/",
                 baseUrl = "https://zarc.pl",
                 // The shop is behind Cloudflare bot protection, so prices can't be read by apps.
                 fetchPrices = false,
@@ -119,7 +119,18 @@ data class PriceSourceConfig(
         )
 
         /** Keeps the user's edits, and adds built-in stores introduced by newer app versions. */
-        fun mergeWithDefaults(saved: List<PriceSourceConfig>): List<PriceSourceConfig> {
+        /** Search addresses shipped in earlier versions that turned out wrong, by store id. */
+        private val OUTDATED_TEMPLATES = mapOf(
+            "zarc" to setOf("https://zarc.pl/search?q={name}"),
+            "caduko" to setOf("https://caduko.com/search?q={name}"),
+        )
+
+        fun mergeWithDefaults(stored: List<PriceSourceConfig>): List<PriceSourceConfig> {
+            val defaults = defaults().associateBy { it.id }
+            val saved = stored.map { s ->
+                val fixed = defaults[s.id]?.takeIf { s.builtIn && s.urlTemplate in OUTDATED_TEMPLATES[s.id].orEmpty() }
+                if (fixed != null) s.copy(urlTemplate = fixed.urlTemplate, platform = fixed.platform, fetchPrices = fixed.fetchPrices) else s
+            }
             val ids = saved.map { it.id }.toSet()
             val missing = defaults().filter { it.id !in ids }
             if (missing.isEmpty()) return saved
