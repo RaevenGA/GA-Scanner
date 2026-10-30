@@ -50,6 +50,8 @@ class GAScannerApp : Application() {
     }
 }
 
+const val USER_AGENT = "GAScanner/${BuildConfig.VERSION_NAME} (Android; +https://github.com/RaevenGA/GA-Scanner)"
+
 /** Very small manual dependency container. */
 class AppContainer(context: Context) {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -63,6 +65,11 @@ class AppContainer(context: Context) {
     }
 
     val http: OkHttpClient = OkHttpClient.Builder()
+        // Some services (e.g. tcgcsv.com) reject requests without an app-specific User-Agent.
+        .addInterceptor { chain ->
+            val req = chain.request()
+            chain.proceed(if (req.header("User-Agent") != null) req else req.newBuilder().header("User-Agent", USER_AGENT).build())
+        }
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
         .build()

@@ -200,3 +200,22 @@ class ProbeFindingsTest {
         assertTrue(StorePriceProvider.looksFoil("Crescent Glaive – Foil AMB • 10 • C • Foil"))
     }
 }
+
+class ZarcLinkTest {
+    @Test fun searchAddressMatchesShop() {
+        val t = PriceSourceConfig.defaults().first { it.id == "zarc" }.urlTemplate
+        assertEquals(
+            "https://zarc.pl/pl/searchquery/Throne-Keeper+Bullfrog/",
+            com.gascanner.app.data.prices.PriceService.fillTemplate(t, "Throne-Keeper Bullfrog", null, null),
+        )
+    }
+
+    @Test fun oldGuessIsUpgraded() {
+        val old = listOf(PriceSourceConfig(id = "zarc", name = "Zarc", kind = PriceSourceKind.SEARCH_LINK,
+            urlTemplate = "https://zarc.pl/search?q={name}", builtIn = true))
+        assertEquals("https://zarc.pl/pl/searchquery/{name}/", PriceSourceConfig.mergeWithDefaults(old).first { it.id == "zarc" }.urlTemplate)
+        val custom = listOf(PriceSourceConfig(id = "zarc", name = "Zarc", kind = PriceSourceKind.SEARCH_LINK,
+            urlTemplate = "https://zarc.pl/my/{name}", builtIn = true))
+        assertEquals("https://zarc.pl/my/{name}", PriceSourceConfig.mergeWithDefaults(custom).first { it.id == "zarc" }.urlTemplate)
+    }
+}

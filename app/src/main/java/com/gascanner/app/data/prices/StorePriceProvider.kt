@@ -132,7 +132,6 @@ class StorePriceProvider(private val client: OkHttpClient, private val json: Jso
         try {
             val request = Request.Builder().url(url)
                 .header("Accept", "application/json")
-                .header("User-Agent", "GAScanner/1.0 (Android)")
                 .build()
             client.newCall(request).execute().use { r ->
                 if (!r.isSuccessful) return@use null
