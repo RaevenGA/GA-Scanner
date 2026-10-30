@@ -29,7 +29,12 @@ data class StoreHit(
     val currency: String,
     val url: String?,
     val inStock: Boolean?,
-)
+    /** Shop's product code; Caduko puts set, number and finish here ("AMB • 10 • C • NF"). */
+    val sku: String = "",
+) {
+    /** Text used for matching: title plus product code. */
+    val matchText: String get() = "$title $sku"
+}
 
 class StoreUnreadableException(store: String) :
     IOException("$store: prices can't be read automatically — use the store link")
@@ -87,8 +92,9 @@ class StorePriceProvider(private val client: OkHttpClient, private val json: Jso
             val price = o.str("price")?.replace(",", ".")?.toDoubleOrNull()
                 ?: o.str("price_min")?.replace(",", ".")?.toDoubleOrNull()
                 ?: return@mapNotNull null
+            if (price <= 0.0) return@mapNotNull null
             StoreHit(
-                title = title,
+                title = stripHtml(title),
                 price = price,
                 currency = currency,
                 url = o.str("url")?.let { if (it.startsWith("http")) it else base + it.substringBefore("?_pos") },
@@ -110,12 +116,14 @@ class StorePriceProvider(private val client: OkHttpClient, private val json: Jso
             val prices = o["prices"] as? JsonObject ?: return@mapNotNull null
             val minor = (prices["currency_minor_unit"] as? JsonPrimitive)?.intOrNull ?: 2
             val raw = prices.str("price")?.toDoubleOrNull() ?: return@mapNotNull null
+            if (raw <= 0.0) return@mapNotNull null // 0 = no price set (sold out listings)
             StoreHit(
                 title = title,
                 price = raw / 10.0.pow(minor),
                 currency = prices.str("currency_code") ?: fallbackCurrency,
                 url = o.str("permalink"),
                 inStock = (o["is_in_stock"] as? JsonPrimitive)?.booleanOrNull,
+                sku = o.str("sku")?.let(::stripHtml).orEmpty(),
             )
         }
     }
@@ -140,10 +148,15 @@ class StorePriceProvider(private val client: OkHttpClient, private val json: Jso
 
     companion object {
         private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
-        private fun stripHtml(s: String) = s.replace(Regex("<[^>]+>"), "").replace("&amp;", "&").replace("&#8217;", "’").trim()
+        fun stripHtml(s: String): String = s.replace(Regex("<[^>]+>"), "")
+            .replace(Regex("&#(\\d+);")) { m -> m.groupValues[1].toIntOrNull()?.let { String(Character.toChars(it)) } ?: m.value }
+            .replace(Regex("&#x([0-9a-fA-F]+);")) { m -> m.groupValues[1].toIntOrNull(16)?.let { String(Character.toChars(it)) } ?: m.value }
+            .replace("&amp;", "&").replace("&quot;", "\"").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">")
+            .trim()
 
         fun looksFoil(title: String): Boolean {
             val t = title.lowercase()
+            if (Regex("\\bnf\\b").containsMatchIn(t)) return false
             return t.contains("foil") && !t.contains("non-foil") && !t.contains("nonfoil") && !t.contains("non foil")
         }
 

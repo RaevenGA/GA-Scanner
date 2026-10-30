@@ -84,6 +84,9 @@ interface CardCacheDao {
     @Query("SELECT * FROM editions WHERE prefixNorm = :prefixNorm AND numberNorm = :numberNorm")
     suspend fun editionsByFooter(prefixNorm: String, numberNorm: String): List<CachedEdition>
 
+    @Query("SELECT * FROM editions WHERE prefixNorm LIKE :prefixPattern AND numberNorm = :numberNorm")
+    suspend fun editionsByFooterLike(prefixPattern: String, numberNorm: String): List<CachedEdition>
+
     @Query("SELECT * FROM editions WHERE uuid = :uuid LIMIT 1")
     suspend fun edition(uuid: String): CachedEdition?
 

@@ -162,7 +162,7 @@ class PriceService(
         source: PriceSourceConfig, card: CardDto, edition: EditionDto?, foil: Boolean, isDefault: Boolean,
     ): List<PriceQuote> {
         val hits = stores.search(source, card.name)
-            .map { it to StorePriceProvider.matchScore(it.title, card.name, edition?.setPrefix, edition?.collectorNumber) }
+            .map { it to StorePriceProvider.matchScore(it.matchText, card.name, edition?.setPrefix, edition?.collectorNumber) }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<StoreHit, Int>> { it.second }.thenBy { it.first.price })
         val best = bestStoreHit(hits, foil)
@@ -190,7 +190,7 @@ class PriceService(
         if (hits.isEmpty()) return null
         val top = hits.maxOf { it.second }
         val pool = hits.filter { it.second == top }.map { it.first }
-        val foilMatch = pool.filter { StorePriceProvider.looksFoil(it.title) == foil }.ifEmpty { pool }
+        val foilMatch = pool.filter { StorePriceProvider.looksFoil(it.matchText) == foil }.ifEmpty { pool }
         val stocked = foilMatch.filter { it.inStock != false }.ifEmpty { foilMatch }
         return stocked.minByOrNull { it.price }
     }
@@ -247,7 +247,7 @@ class PriceService(
                 emptyList()
             }
             for (item in group) {
-                val scored = hits.map { it to StorePriceProvider.matchScore(it.title, name, item.setPrefix, item.collectorNumber) }
+                val scored = hits.map { it to StorePriceProvider.matchScore(it.matchText, name, item.setPrefix, item.collectorNumber) }
                     .filter { it.second > 0 }
                 bestStoreHit(scored, item.foil)?.let {
                     cache.put(CachedPrice(item.editionUuid, source.id, item.foil, it.price, it.currency, it.url, System.currentTimeMillis()))

@@ -55,7 +55,7 @@ object CardTextParser {
     // Set code (2–5 chars, e.g. AMB, DOA, ALC), optional edition marker, then a 1–3 digit number.
     // O/I/L are accepted in the number because OCR often confuses them with 0/1.
     private val footerRegex =
-        Regex("""\b([A-Z][A-Z0-9]{1,4})\s*(1ST|ALT)?\s*[·•\-#:/|.]?\s*([0-9OIL]{1,3})\b""")
+        Regex("""\b([A-Z][A-Z0-9]{1,4})\s*(1ST|ALTER|ALT)?\s*[·•\-#:/|.]?\s*([0-9OIL]{1,3})\b""")
 
     private val noiseWords = setOf(
         "LEVEL", "LV", "POWER", "LIFE", "DUR", "COST", "SPEED", "CLASS", "ILLUS", "ILLUSTRATED",
@@ -117,7 +117,11 @@ object CardTextParser {
             val number = m.groupValues[3]
                 .replace('O', '0').replace('I', '1').replace('L', '1')
             if (!number.all { it.isDigit() }) return@mapNotNull null
-            val edition = if (m.groupValues[2] == "1ST") " 1st" else ""
+            val edition = when (m.groupValues[2]) {
+                "1ST" -> " 1st"
+                "ALT", "ALTER" -> " Alter"
+                else -> ""
+            }
             FooterCode(setPrefix = code + edition, number = number.padStart(3, '0'))
         }.toList()
     }

@@ -230,9 +230,11 @@ class CardRepository(
         val n = normalizeNumber(collectorNumber)
         if (p.isEmpty()) return emptyList()
         if (dao.count() > 0) {
+            // Exact set code first; then the same code with any edition marker ("DOA" -> "DOA 1st", "DTR Alter").
+            val core = p.removeSuffix("1ST").removeSuffix("ALTER")
             var rows = dao.editionsByFooter(p, n)
-            if (rows.isEmpty() && !p.endsWith("1ST")) rows = dao.editionsByFooter(p + "1ST", n)
-            if (rows.isEmpty() && p.endsWith("1ST")) rows = dao.editionsByFooter(p.removeSuffix("1ST"), n)
+            if (rows.isEmpty()) rows = dao.editionsByFooterLike("$p%", n)
+            if (rows.isEmpty() && core != p) rows = dao.editionsByFooter(core, n).ifEmpty { dao.editionsByFooterLike("$core%", n) }
             return rows.mapNotNull { row ->
                 val card = cardByUuid(row.cardUuid) ?: return@mapNotNull null
                 CardHit(card, card.allEditions.firstOrNull { it.uuid == row.uuid })

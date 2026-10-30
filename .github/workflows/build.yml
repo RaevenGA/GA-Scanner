@@ -43,7 +43,8 @@ jobs:
           if [ -n "$warnings" ]; then echo "::notice title=Kotlin warnings::$warnings"; fi
           apk=$(ls -l app/build/outputs/apk/debug/*.apk 2>/dev/null | awk '{printf "%.1f MB %s", $5/1048576, $9}')
           kt=$(grep -c 'Task :app:compileDebugKotlin' build-output.txt)
-          echo "::notice title=Build summary::APK ${apk:-missing} · Kotlin compile tasks: $kt · warnings: $(grep -c '^w: ' build-output.txt) · tests: $(grep -cE ' FAILED$' build-output.txt) failed"
+          ran=$(cat app/build/test-results/testDebugUnitTest/*.xml 2>/dev/null | grep -o '<testsuite [^>]*tests="[0-9]*"' | grep -o 'tests="[0-9]*"' | grep -o '[0-9]*' | paste -sd+ | bc)
+          echo "::notice title=Build summary::APK ${apk:-missing} · Kotlin compile tasks: $kt · warnings: $(grep -c '^w: ' build-output.txt) · tests: ${ran:-0} run, $(grep -cE ' FAILED$' build-output.txt) failed"
           exit 0
 
       - uses: actions/upload-artifact@v4

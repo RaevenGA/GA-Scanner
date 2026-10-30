@@ -184,3 +184,19 @@ class TranslationTest {
         assertEquals("22 karty", StringsPl.cardsCount(22))
     }
 }
+
+class ProbeFindingsTest {
+    @Test fun alterPrintings() {
+        assertEquals(listOf(FooterCode("DTR Alter", "223")), CardTextParser.footerCodesIn("DTR ALTER • 223"))
+        assertEquals("DTRALTER", normalizePrefix("DTR Alter"))
+    }
+
+    @Test fun cadukoListings() {
+        // Real Caduko (WooCommerce) data: title with an HTML dash entity, set/number/finish in the SKU.
+        val title = StorePriceProvider.stripHtml("Crescent Glaive &#8211; Non-Foil")
+        assertEquals("Crescent Glaive – Non-Foil", title)
+        assertEquals(2, StorePriceProvider.matchScore("$title AMB • 10 • C • NF", "Crescent Glaive", "AMB", "010"))
+        assertFalse(StorePriceProvider.looksFoil("$title AMB • 10 • C • NF"))
+        assertTrue(StorePriceProvider.looksFoil("Crescent Glaive – Foil AMB • 10 • C • Foil"))
+    }
+}

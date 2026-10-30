@@ -70,10 +70,11 @@ data class PriceSourceConfig(
                 id = "caduko",
                 name = "Caduko",
                 kind = PriceSourceKind.SEARCH_LINK,
-                urlTemplate = "https://caduko.com/search?q={name}",
+                urlTemplate = "https://caduko.com/?s={name}&post_type=product",
                 baseUrl = "https://caduko.com",
                 fetchPrices = true,
                 currency = "EUR",
+                platform = StorePlatform.WOOCOMMERCE,
                 builtIn = true,
             ),
             PriceSourceConfig(
@@ -82,7 +83,8 @@ data class PriceSourceConfig(
                 kind = PriceSourceKind.SEARCH_LINK,
                 urlTemplate = "https://zarc.pl/search?q={name}",
                 baseUrl = "https://zarc.pl",
-                fetchPrices = true,
+                // The shop is behind Cloudflare bot protection, so prices can't be read by apps.
+                fetchPrices = false,
                 currency = "PLN",
                 builtIn = true,
             ),
