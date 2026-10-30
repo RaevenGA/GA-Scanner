@@ -27,13 +27,20 @@ build decks, manage want-to-sell / want-to-buy lists and check prices in shops.
 - **Prices**
   - *Default shop* — shown first on card pages and used for collection, list and deck values.
   - *TCGplayer market price* (USD) via [tcgcsv.com](https://tcgcsv.com), cached daily.
-  - *Caduko* (EUR) and *Zarc* (PLN) with live prices read in the app, if the shop runs on Shopify or
-    WooCommerce (detected automatically; otherwise they work as search links).
+  - *Caduko* (EUR) — live prices in the app (WooCommerce), matched to the exact set, number and
+    foil / non-foil using the shop's product codes.
+  - *Zarc* (PLN) — search link. The shop is behind Cloudflare bot protection, so no app can read its
+    prices automatically.
   - *Cardmarket* — search link (Grand Archive singles are expected there soon), TCGplayer, eBay.
   - Any other shop: Settings → *Add store*.
   - Display currency PLN / EUR / USD / GBP (ECB rates via frankfurter.app).
 - **Languages** — English, Polski, Deutsch, Français, Español (Settings → Language). Card names and
   rules text stay in English, as they come from the official database.
+
+## Build checks
+
+Every push builds the APK and runs the unit tests (`app/src/test`). Compiler errors, warnings and
+failed tests appear on the run's summary page on GitHub, so the full log isn't needed.
 
 ## Getting the app
 
