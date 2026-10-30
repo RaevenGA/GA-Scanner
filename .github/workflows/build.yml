@@ -39,6 +39,9 @@ jobs:
           if [ -n "$errors" ]; then echo "::error title=Kotlin errors::$errors"; fi
           if [ -n "$failure" ]; then echo "::error title=Build failure::$failure"; fi
           if [ -n "$warnings" ]; then echo "::notice title=Kotlin warnings::$warnings"; fi
+          apk=$(ls -l app/build/outputs/apk/debug/*.apk 2>/dev/null | awk '{printf "%.1f MB %s", $5/1048576, $9}')
+          kt=$(grep -c 'Task :app:compileDebugKotlin' build-output.txt)
+          echo "::notice title=Build summary::APK ${apk:-missing} · Kotlin compile tasks: $kt · warnings: $(grep -c '^w: ' build-output.txt)"
           exit 0
 
       - uses: actions/upload-artifact@v4
