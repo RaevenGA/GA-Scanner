@@ -41,19 +41,6 @@ build decks, manage want-to-sell / want-to-buy lists and check prices in shops.
 - **Languages** — English, Polski, Deutsch, Français, Español (Settings → Language). Card names and
   rules text stay in English, as they come from the official database.
 
-## Build checks
-
-Every push builds the APK and runs the unit tests (`app/src/test`). Compiler errors, warnings and
-failed tests appear on the run's summary page on GitHub, so the full log isn't needed.
-
-## Getting the app
-
-The repository builds an APK on GitHub automatically (`.github/workflows/build.yml`):
-*Actions* tab → latest green run → *Artifacts* → **ga-scanner-apk**. Every build is signed with the
-same key (`app/debug.keystore`), so new versions install over old ones and keep your data.
-
-To build locally: Android Studio → *Open* → *Run*, or `./gradlew assembleDebug`.
-
 ## CSV format
 
 Export writes `name,set,number,foil,quantity,set_name,edition_uuid,card_slug`.
