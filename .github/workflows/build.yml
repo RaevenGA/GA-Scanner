@@ -31,14 +31,15 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set +e +o pipefail
           strip() { sed -E 's#^(e|w): file://[^ ]*/app/src/main/java/com/gascanner/app/##'; }
           errors=$(grep -E '^e: ' build-output.txt | strip | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
           warnings=$(grep -E '^w: ' build-output.txt | strip | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
           failure=$(grep -E -A12 '^\* What went wrong' build-output.txt | head -14 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
-          [ -n "$errors" ] && echo "::error title=Kotlin errors::$errors"
-          [ -n "$failure" ] && echo "::error title=Build failure::$failure"
-          [ -n "$warnings" ] && echo "::notice title=Kotlin warnings::$warnings"
-          ls -l app/build/outputs/apk/debug/ 2>/dev/null | tail -n +2 | sed 's/^/APK: /' || true
+          if [ -n "$errors" ]; then echo "::error title=Kotlin errors::$errors"; fi
+          if [ -n "$failure" ]; then echo "::error title=Build failure::$failure"; fi
+          if [ -n "$warnings" ]; then echo "::notice title=Kotlin warnings::$warnings"; fi
+          exit 0
 
       - uses: actions/upload-artifact@v4
         with:
