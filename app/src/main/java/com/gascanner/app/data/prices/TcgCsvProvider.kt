@@ -40,7 +40,13 @@ class TcgCsvProvider(
         val market: Double? = null,
         val low: Double? = null,
         val mid: Double? = null,
-    )
+    ) {
+        val isFoil: Boolean
+            get() {
+                val st = subType ?: return false
+                return st.contains("foil", ignoreCase = true) && !st.contains("non", ignoreCase = true)
+            }
+    }
 
     @Serializable
     private data class Index(val fetchedAt: Long, val rows: List<Row>)
@@ -68,6 +74,7 @@ class TcgCsvProvider(
     private val mutex = Mutex()
     private var byName: Map<String, List<Row>>? = null
     private var fetchedAt: Long = 0L
+    private var failedAt: Long = 0L
 
     val lastUpdated: Long get() = fetchedAt
 
@@ -100,16 +107,24 @@ class TcgCsvProvider(
     }
 
     suspend fun refresh() {
-        mutex.withLock { download() }
+        mutex.withLock {
+            failedAt = 0L
+            download()
+        }
     }
 
     private suspend fun ensureIndex(): Map<String, List<Row>> = mutex.withLock {
         val fresh = System.currentTimeMillis() - fetchedAt < MAX_AGE_MS
         byName?.takeIf { fresh }?.let { return@withLock it }
         loadFromDisk()?.let { if (System.currentTimeMillis() - it.fetchedAt < MAX_AGE_MS) return@withLock install(it) }
+        if (System.currentTimeMillis() - failedAt < RETRY_AFTER_MS) {
+            // Recently failed (e.g. offline): don't hammer the network for every card.
+            return@withLock loadFromDisk()?.let { install(it) } ?: throw IOException("TCGplayer prices unavailable")
+        }
         try {
             download()
         } catch (e: IOException) {
+            failedAt = System.currentTimeMillis()
             // Offline: fall back to any stale cache rather than showing nothing.
             loadFromDisk()?.let { install(it) } ?: throw e
         }
@@ -187,6 +202,7 @@ class TcgCsvProvider(
     companion object {
         private const val BASE = "https://tcgcsv.com/tcgplayer"
         private const val MAX_AGE_MS = 24L * 60 * 60 * 1000
+        private const val RETRY_AFTER_MS = 5L * 60 * 1000
 
         fun normalize(s: String): String =
             s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()

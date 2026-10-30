@@ -1,92 +1,91 @@
 # GA Scanner — Grand Archive TCG card scanner (Android)
 
-Native Android app (Kotlin + Jetpack Compose) to scan Grand Archive cards, keep a collection,
-build decks and check prices from configurable stores.
+Free native Android app (Kotlin + Jetpack Compose) to scan Grand Archive cards, keep a collection,
+build decks, manage want-to-sell / want-to-buy lists and check prices in shops.
 
-## Features
+## Features (v0.2)
 
-- **Card search** — live search of the official card database (`api.gatcg.com`, no key needed).
-- **Card page** — art, stats, effect, all editions (set + collector number), owned count.
-- **Scan** — free by default. Take a photo (or pick one from the gallery); Google ML Kit reads
-  the card name and the footer (set code + collector number) on the phone, offline. The app looks
-  the exact edition up in the database and also offers name matches, tolerant of OCR typos.
-  Optional "Claude" mode (your own API key) handles glare, foils and odd angles better.
-  Tap **+** to add straight to the collection; "Scan next card" keeps a fast loop.
-- **Collection** — stored on the phone (Room). Quantities per edition and foil/non-foil, filter.
-- **Decks** — Material deck / Main deck / Sideboard sections, quantities, rename, delete,
-  share decklist as text.
+- **Offline card database** — the whole official database (`api.gatcg.com`) is downloaded on first
+  launch; every later launch only fetches cards changed since the last check. Search, card pages and
+  scanning then work without internet. Settings → *Offline card database* shows the status.
+- **Scanning** (free, on the phone, Google ML Kit):
+  - *Live* — point the camera at a card; it's recognised continuously, with a vibration when a card
+    locks on. *Auto-add* adds each new card to the chosen list; take the card out of view to scan the
+    same card again, or tap **+** for another copy.
+  - *Photo* — one card per photo, with result alternatives.
+  - *Several* — one photo of several cards laid out with their bottom edge visible; tick the ones to add.
+  - *Art matching* — when only the name is legible, the printing is chosen by comparing the artwork
+    with the database images (64-bit difference hash, cached on the phone).
+  - Scanned cards go to *Collection*, *Sell list* or *Buy list* (choose under the camera).
+  - Optional *Claude* mode (your own Anthropic API key) for Photo / Several.
+- **Collection** — Owned / Want to sell / Want to buy tabs; quantities per edition and foil;
+  list view or card images 2 or 3 per row; total value; CSV import & export.
+- **Want to sell / Want to buy** — asking or max price and a note per card; *Share* sends a
+  ready-to-post text (Messenger, Discord, Facebook groups) with prices and total.
+- **Decks** — Material / Main / Sideboard; list or image grid; legality check for Standard,
+  Pantheon (banlist) and Draft; deck value; share decklist.
 - **Prices**
-  - *TCGplayer market price* (USD) — real prices from [tcgcsv.com](https://tcgcsv.com), a free
-    daily mirror of TCGplayer's catalog. The whole Grand Archive category is downloaded once per
-    day and cached, so later lookups are instant. The row matching the selected edition is
-    highlighted.
-  - *Store links* — TCGplayer, Cardmarket, eBay (off by default) plus any shop you add.
-  - *Display currency* — show prices in PLN, EUR, USD or GBP (ECB rates via frankfurter.app).
-- **Settings** — API key, vision model, currency, enable/disable/edit/add stores.
+  - *Default shop* — shown first on card pages and used for collection, list and deck values.
+  - *TCGplayer market price* (USD) via [tcgcsv.com](https://tcgcsv.com), cached daily.
+  - *Caduko* (EUR) — live prices in the app (WooCommerce), matched to the exact set, number and
+    foil / non-foil using the shop's product codes.
+  - *Zarc* (PLN) — search link. The shop is behind Cloudflare bot protection, so no app can read its
+    prices automatically.
+  - *Cardmarket* — search link (Grand Archive singles are expected there soon), TCGplayer, eBay.
+  - Any other shop: Settings → *Add store*.
+  - Display currency PLN / EUR / USD / GBP (ECB rates via frankfurter.app).
+- **Languages** — English, Polski, Deutsch, Français, Español (Settings → Language). Card names and
+  rules text stay in English, as they come from the official database.
 
-## Build & run
+## Build checks
 
-1. Install **Android Studio** (Ladybug 2024.2 or newer).
-2. *File → Open* this folder. Let Gradle sync (it downloads Gradle 8.11.1, AGP 8.7.3, Kotlin 2.1).
-3. Connect a phone with USB debugging (or start an emulator) and press **Run**.
-   Minimum Android 8.0 (API 26).
+Every push builds the APK and runs the unit tests (`app/src/test`). Compiler errors, warnings and
+failed tests appear on the run's summary page on GitHub, so the full log isn't needed.
 
-From the command line: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`.
+## Getting the app
 
-## Scanning modes
+The repository builds an APK on GitHub automatically (`.github/workflows/build.yml`):
+*Actions* tab → latest green run → *Artifacts* → **ga-scanner-apk**. Every build is signed with the
+same key (`app/debug.keystore`), so new versions install over old ones and keep your data.
 
-**On-device (default, free)** — no account, no key, no internet needed for the reading step
-(the database lookup still needs internet). Uses Google ML Kit text recognition, whose model is
-bundled in the APK (~4 MB). Tips: fill the frame with one card, avoid glare on foils, hold steady.
-Matching logic lives in `scan/OnDeviceRecognizer.kt` (`CardTextParser`) and `ui/scan/ScanViewModel.kt`.
+To build locally: Android Studio → *Open* → *Run*, or `./gradlew assembleDebug`.
 
-**Claude (optional)** — Settings → Card scanning → *Claude (API key)*. Create a key at
-<https://console.anthropic.com>; each scan is one small paid request. The key is stored only on
-the phone.
+## CSV format
 
-## Adding a store (e.g. a Polish shop)
+Export writes `name,set,number,foil,quantity,set_name,edition_uuid,card_slug`.
+Import accepts any CSV with a header row and at least a `name` column (also `set`, `number`,
+`foil`, `quantity`, `price`, `note`; English or Polish column names; comma or semicolon). Cards are
+matched by edition id, then set + number, then name.
 
-Settings → **Add store**:
+## Adding a store
 
-1. On the shop's website, search for any card, e.g. "Lorraine".
-2. Copy the address of the results page, e.g. `https://shop.example.pl/szukaj?q=Lorraine`.
-3. Replace the card name with `{name}` → `https://shop.example.pl/szukaj?q={name}`.
+Settings → **Add store**: search for any card on the shop's website, copy the results address and
+replace the card name with `{name}`. Placeholders: `{name}` · `{set}` · `{number}` · `{query}`
+(name + set). Turn on *Show live prices in the app* for Shopify / WooCommerce shops.
 
-Placeholders: `{name}` card name · `{set}` set code · `{number}` collector number ·
-`{query}` name + set code.
+## Notes and limits
 
-## Things to verify on first run
-
-These couldn't be tested against the live services while writing the code:
-
-- **Search parameter** — the app calls `GET /cards/search?name=…&page=…`. If search returns
-  unrelated cards, check the parameter name in the API docs (<https://api-docs.gatcg.com>) and
-  change it in `data/api/GatcgApi.kt`.
-- **Cardmarket link** — uses Cardmarket's general search URL. I couldn't confirm that Cardmarket
-  lists Grand Archive; if it doesn't, disable that source or edit its URL.
-- **TCGplayer matching** — rows are matched by card name, then ranked by set and collector
-  number. Unusual names (promos, alternate arts) may need tuning in `TcgCsvProvider.score()`.
+- The deck legality check follows the published tournament rules (main deck ≥ 60, max 4 copies,
+  material deck ≤ 12 unique cards with a level 0 champion, sideboard ≤ 15 cards / 15 points;
+  Draft main deck ≥ 30). Banned / limited cards come from the database's `legality` field.
+- Live shop prices match listings by card name, then set and number; listings with unusual titles
+  may not be matched.
+- Your collection, decks and lists stay on the phone; export a CSV to back them up.
 
 ## Project layout
 
 ```
 app/src/main/java/com/gascanner/app/
-  GAScannerApp.kt          app + dependency container
-  MainActivity.kt          navigation + bottom bar
-  data/api/                Grand Archive API client + models
-  data/db/                 Room: collection, decks
-  data/settings/           DataStore settings, price-source config
-  data/prices/             TCGplayer (tcgcsv), store links, currency conversion
-  scan/                    Claude vision recognizer, image prep
-  ui/                      Compose screens: search, card, scan, collection, decks, settings
+  GAScannerApp.kt     app + dependency container
+  MainActivity.kt     navigation, language
+  i18n/               UI text: Strings.kt (English) + Pl / De / Fr / Es
+  data/api/           Grand Archive API client + models
+  data/cache/         offline card database, price cache, art hashes
+  data/db/            collection, decks, deck rules
+  data/lists/         want to sell / want to buy
+  data/csv/           CSV import / export
+  data/prices/        TCGplayer, shops (Shopify / WooCommerce), currency
+  data/settings/      settings, stores
+  scan/               on-device OCR, Claude, art matching, card matching
+  ui/                 screens
 ```
-
-## Ideas for next steps
-
-- Collection value total (prices are already cached locally).
-- Import/export collection as CSV.
-- Offline card database cache for search without internet.
-- Deck legality / format checks using the API's `legality` field.
-- Batch scanning several cards from one photo.
-- Live auto-scan (read frames continuously, no shutter press).
-- Image fingerprinting of card art to tell alternate-art printings apart without reading text.

@@ -8,6 +8,9 @@ class CollectionRepository(private val dao: CollectionDao) {
     val all: Flow<List<CollectionEntry>> = dao.observeAll()
 
     fun countForCard(slug: String): Flow<Int> = dao.observeCountForCard(slug)
+    fun entriesForCard(slug: String): Flow<List<CollectionEntry>> = dao.observeForCard(slug)
+    suspend fun snapshot(): List<CollectionEntry> = dao.all()
+    suspend fun clear() = dao.clear()
 
     suspend fun add(card: CardDto, edition: EditionDto, foil: Boolean, quantity: Int = 1) {
         val existing = dao.find(edition.uuid, foil)

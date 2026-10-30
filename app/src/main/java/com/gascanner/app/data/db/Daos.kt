@@ -20,6 +20,15 @@ interface CollectionDao {
     @Query("SELECT * FROM collection WHERE editionUuid = :editionUuid AND foil = :foil LIMIT 1")
     suspend fun find(editionUuid: String, foil: Boolean): CollectionEntry?
 
+    @Query("SELECT * FROM collection ORDER BY cardName COLLATE NOCASE, setPrefix, collectorNumber")
+    suspend fun all(): List<CollectionEntry>
+
+    @Query("SELECT * FROM collection WHERE cardSlug = :slug ORDER BY setPrefix, collectorNumber")
+    fun observeForCard(slug: String): Flow<List<CollectionEntry>>
+
+    @Query("DELETE FROM collection")
+    suspend fun clear()
+
     @Insert
     suspend fun insert(entry: CollectionEntry): Long
 
