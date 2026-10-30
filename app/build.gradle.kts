@@ -16,6 +16,9 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "0.2.0"
+
+        // Phones only (ARM); leaves out emulator libraries to keep the APK small.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // Fixed key so every build (local or GitHub) can update the app already installed on a phone.

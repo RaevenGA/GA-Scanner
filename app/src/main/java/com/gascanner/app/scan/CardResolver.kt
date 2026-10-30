@@ -20,7 +20,12 @@ data class Candidate(
 /** Turns what was read off a card into database cards. Works offline once the card database is downloaded. */
 class CardResolver(private val cards: CardRepository, private val art: ArtMatcher) {
 
-    suspend fun resolve(guess: ScanGuess, cardImage: Bitmap?, allowNetwork: Boolean = true): List<Candidate> {
+    suspend fun resolve(
+        guess: ScanGuess,
+        cardImage: Bitmap?,
+        allowNetwork: Boolean = true,
+        minNameScore: Double = MIN_NAME,
+    ): List<Candidate> {
         val out = mutableListOf<Candidate>()
         val nameQueries = (listOf(guess.name) + guess.nameLines).filter { it.isNotBlank() }.distinct()
 
@@ -46,7 +51,7 @@ class CardResolver(private val cards: CardRepository, private val art: ArtMatche
         // 2) Name matching, tolerant to OCR typos.
         if (nameQueries.isNotEmpty()) {
             val wantedPrefix = codes.firstOrNull()?.setPrefix
-            for (card in byName(nameQueries, allowNetwork)) {
+            for (card in byName(nameQueries, allowNetwork, minNameScore)) {
                 if (out.any { it.card.uuid == card.uuid }) continue
                 val edition = card.allEditions.firstOrNull {
                     wantedPrefix != null && normalizePrefix(it.setPrefix) == normalizePrefix(wantedPrefix)
@@ -90,9 +95,9 @@ class CardResolver(private val cards: CardRepository, private val art: ArtMatche
         return out.values.toList()
     }
 
-    private suspend fun byName(queries: List<String>, allowNetwork: Boolean): List<CardDto> {
+    private suspend fun byName(queries: List<String>, allowNetwork: Boolean, minScore: Double = MIN_NAME): List<CardDto> {
         if (cards.offlineCount() > 0) {
-            val scored = queries.take(4).flatMap { q -> cards.fuzzyByName(q, limit = 6, minScore = MIN_NAME) }
+            val scored = queries.take(4).flatMap { q -> cards.fuzzyByName(q, limit = 6, minScore = minScore) }
                 .groupBy { it.first.uuid }
                 .map { (_, v) -> v.maxBy { it.second } }
                 .sortedByDescending { it.second }
@@ -112,16 +117,18 @@ class CardResolver(private val cards: CardRepository, private val art: ArtMatche
         }
         return found.values
             .map { c -> c to queries.maxOf { nameSimilarity(it, c.name) } }
-            .filter { it.second >= MIN_NAME }
+            .filter { it.second >= minScore }
             .sortedByDescending { it.second }
             .take(6)
             .map { it.first }
     }
 
-    private companion object {
-        const val MAX_FOOTER_TRIES = 4
-        const val MIN_NAME = 0.5
-        const val STRONG_NAME = 0.85
-        const val MAX_NETWORK_NAMES = 8
+    companion object {
+        /** Live scanning sees lots of random text, so a name alone must match closely. */
+        const val LIVE_MIN_NAME = 0.8
+        private const val MAX_FOOTER_TRIES = 4
+        private const val MIN_NAME = 0.5
+        private const val STRONG_NAME = 0.85
+        private const val MAX_NETWORK_NAMES = 8
     }
 }

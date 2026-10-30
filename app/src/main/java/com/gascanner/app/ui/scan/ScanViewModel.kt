@@ -8,6 +8,7 @@ import com.gascanner.app.AppContainer
 import com.gascanner.app.data.lists.TradeListType
 import com.gascanner.app.data.settings.AddTarget
 import com.gascanner.app.scan.Candidate
+import com.gascanner.app.scan.CardResolver
 import com.gascanner.app.scan.CardTextParser
 import com.gascanner.app.scan.Capture
 import com.gascanner.app.scan.ScanGuess
@@ -172,7 +173,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
                     return@launch
                 }
                 val offline = c.cards.offlineCount() > 0
-                val candidate = c.resolver.resolve(guess, cardImage = null, allowNetwork = !offline).firstOrNull()
+                val candidate = c.resolver.resolve(guess, cardImage = null, allowNetwork = !offline, minNameScore = CardResolver.LIVE_MIN_NAME).firstOrNull()
                 if (candidate == null) {
                     onEmptyFrame(seeingText = true)
                     return@launch

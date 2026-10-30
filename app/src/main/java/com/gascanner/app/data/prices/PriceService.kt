@@ -85,9 +85,11 @@ class PriceService(
             try {
                 when (source.kind) {
                     PriceSourceKind.TCGPLAYER_MARKET -> quotes += tcgQuotes(source, card, edition, foil, isDefault)
-                    PriceSourceKind.SEARCH_LINK -> {
-                        fillTemplate(source.urlTemplate, card, edition)?.let { links += StoreLink(source.id, source.name, it, isDefault) }
+                    PriceSourceKind.SEARCH_LINK -> try {
+                        // Fetch first: it detects the shop platform, which can correct the search link.
                         if (source.fetchPrices) quotes += storeQuotes(source, card, edition, foil, isDefault)
+                    } finally {
+                        fillTemplate(linkTemplate(source), card, edition)?.let { links += StoreLink(source.id, source.name, it, isDefault) }
                     }
                 }
             } catch (e: CancellationException) {
@@ -97,6 +99,13 @@ class PriceService(
             }
         }
         return PriceResult(convertAll(quotes, s.displayCurrency), links, errors)
+    }
+
+    /** A WooCommerce shop doesn't use Shopify's /search?q= address; switch the guessed link. */
+    private fun linkTemplate(source: PriceSourceConfig): String {
+        val t = source.urlTemplate
+        val woo = stores.detectedPlatform(source) == com.gascanner.app.data.settings.StorePlatform.WOOCOMMERCE
+        return if (woo && t.endsWith("/search?q={name}")) source.effectiveBaseUrl + "/?s={name}&post_type=product" else t
     }
 
     private suspend fun convertAll(quotes: List<PriceQuote>, target: String): List<PriceQuote> =
