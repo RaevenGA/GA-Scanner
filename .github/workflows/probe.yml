@@ -14,21 +14,17 @@ jobs:
         run: |
           set +e
           note() { echo "::notice title=$1::$(echo "$2" | head -c 3000 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; }
-          A=https://api.gatcg.com
-          r=$(curl -s "$A/cards/search?sort=name&page=1&page_size=50")
-          note "search-all" "$(echo "$r" | jq -c '{total_cards,total_pages,has_more,page_size,n:(.data|length),first:(.data[0].name)}')"
-          note "legality-sample" "$(echo "$r" | jq -c '[.data[] | select(.legality != null and .legality != {} and .legality != []) | {name, legality}] | .[0:3]')"
-          note "legality-types" "$(echo "$r" | jq -c '[.data[].legality | type] | group_by(.) | map({(.[0]): length}) | add')"
-          note "edition-sample" "$(echo "$r" | jq -c '.data[0].editions[0] | {collector_number, rarity, image, set: .set.prefix, circulations, circulationTemplates: (.circulationTemplates|length)}')"
-          note "incremental" "$(curl -s "$A/cards/search?last_update=2026-10-01&page_size=5" | jq -c '{total_cards,n:(.data|length)}' 2>&1 | head -c 300)"
-          note "edition-incremental" "$(curl -s "$A/cards/search?edition_last_update=2026-10-01&page_size=5" | jq -c '{total_cards,n:(.data|length)}' 2>&1 | head -c 300)"
-          note "prefixes" "$(curl -s "$A/option/search" | jq -c 'keys' | head -c 600)"
-          note "name-search" "$(curl -s "$A/cards/search?name=lorraine&page_size=5" | jq -c '[.data[].name]')"
-          note "footer-lookup" "$(curl -s -o /dev/null -w '%{http_code}' "$A/cards/AMB/010")"
-          for shop in https://caduko.com https://zarc.pl https://www.zarc.pl; do
-            s=$(curl -sL -m 20 -o /tmp/s.json -w '%{http_code} %{content_type}' "$shop/search/suggest.json?q=lorraine&resources%5Btype%5D=product&resources%5Blimit%5D=3")
-            w=$(curl -sL -m 20 -o /tmp/w.json -w '%{http_code} %{content_type}' "$shop/wp-json/wc/store/v1/products?search=lorraine&per_page=3")
-            h=$(curl -sL -m 20 "$shop/" | grep -o -iE 'shopify|woocommerce|prestashop|shoper|wp-content|magento|idosell|sky-shop' | sort | uniq -c | tr '\n' ' ')
-            note "shop $shop" "shopify:$s $(head -c 400 /tmp/s.json)  || woo:$w $(head -c 400 /tmp/w.json)  || page:$h"
+          for shop in https://zarc.pl https://www.zarc.pl; do
+            s=$(curl -sL -m 25 -A "Mozilla/5.0" -o /tmp/s.json -w '%{http_code} %{content_type} %{url_effective}' "$shop/search/suggest.json?q=lorraine&resources%5Btype%5D=product&resources%5Blimit%5D=3")
+            w=$(curl -sL -m 25 -A "Mozilla/5.0" -o /tmp/w.json -w '%{http_code} %{content_type}' "$shop/wp-json/wc/store/v1/products?search=lorraine&per_page=3")
+            curl -sL -m 25 -A "Mozilla/5.0" "$shop/" -o /tmp/home.html
+            h=$(grep -o -iE 'shopify|woocommerce|prestashop|shoper|wp-content|magento|idosell|sky-shop|shopgold|redcart|comarch|sote|presta|opencart|nuxt|next' /tmp/home.html | tr A-Z a-z | sort | uniq -c | tr '\n' ' ')
+            f=$(grep -o -iE '<form[^>]*(search|szukaj)[^>]*>' /tmp/home.html | head -3 | tr '\n' ' ')
+            i=$(grep -o -iE 'name="[a-z_]*(search|query|q|s|phrase|szukaj)[a-z_]*"' /tmp/home.html | sort -u | head -5 | tr '\n' ' ')
+            note "zarc $shop" "shopify:$s $(head -c 300 /tmp/s.json) || woo:$w $(head -c 300 /tmp/w.json) || page:$h || form:$f || inputs:$i || size:$(wc -c </tmp/home.html)"
           done
+          r=$(curl -sL -m 25 "https://caduko.com/wp-json/wc/store/v1/products?search=crescent%20glaive&per_page=5")
+          note "caduko items" "$(echo "$r" | jq -c '[.[] | {name, sku, price: .prices.price, cur: .prices.currency_code, minor: .prices.currency_minor_unit, stock: .is_in_stock, cats: [.categories[]?.name]}]' | head -c 2500)"
+          r=$(curl -sL -m 25 "https://caduko.com/wp-json/wc/store/v1/products?search=lorraine&per_page=20")
+          note "caduko zero prices" "$(echo "$r" | jq -c '[.[] | {name, p: .prices.price, stock: .is_in_stock, purch: .is_purchasable}] | group_by(.p == "0") | map({zero: (.[0].p == "0"), n: length, stock: (map(.stock) | unique), purch: (map(.purch)|unique)})')"
           exit 0
