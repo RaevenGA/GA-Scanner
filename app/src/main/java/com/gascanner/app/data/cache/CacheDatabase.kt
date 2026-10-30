@@ -25,6 +25,13 @@ data class CachedCard(
     val nameNorm: String,
     /** Full CardDto as JSON. */
     val json: String,
+    /** Normalized name + rules text + types, for keyword search ("taunt", "floating memory"). */
+    val searchText: String = "",
+    /** Space-padded normalized elements/types/subtypes/classes, e.g. " fire champion warrior ". */
+    val tags: String = "",
+    /** Comma-separated raw values, used to build the filter menus. */
+    val elements: String = "",
+    val types: String = "",
 )
 
 @Entity(
@@ -40,7 +47,12 @@ data class CachedEdition(
     val collectorNumber: String,
     val numberNorm: String,
     val imageUrl: String?,
+    val setName: String = "",
+    val releaseDate: String = "",
 )
+
+data class SetInfo(val setPrefix: String, val prefixNorm: String, val setName: String, val releaseDate: String, val cards: Int)
+data class CardFacets(val elements: String, val types: String)
 
 @Entity(tableName = "price_cache", primaryKeys = ["editionUuid", "sourceId", "foil"])
 data class CachedPrice(
@@ -77,6 +89,34 @@ interface CardCacheDao {
 
     @Query("SELECT * FROM cards WHERE slug IN (:slugs)")
     suspend fun bySlugs(slugs: List<String>): List<CachedCard>
+
+    /** Browse: every condition is optional (pass null). */
+    @Query(
+        """
+        SELECT * FROM cards
+        WHERE (:pattern IS NULL OR searchText LIKE :pattern)
+          AND (:prefixNorm IS NULL OR uuid IN (SELECT cardUuid FROM editions WHERE prefixNorm = :prefixNorm))
+          AND (:tag1 IS NULL OR tags LIKE :tag1)
+          AND (:tag2 IS NULL OR tags LIKE :tag2)
+        ORDER BY name COLLATE NOCASE
+        LIMIT :limit
+        """
+    )
+    suspend fun browse(pattern: String?, prefixNorm: String?, tag1: String?, tag2: String?, limit: Int): List<CachedCard>
+
+    @Query(
+        """
+        SELECT setPrefix, prefixNorm, MAX(setName) AS setName, MAX(releaseDate) AS releaseDate, COUNT(DISTINCT cardUuid) AS cards
+        FROM editions GROUP BY prefixNorm ORDER BY releaseDate DESC, setName
+        """
+    )
+    suspend fun sets(): List<SetInfo>
+
+    @Query("SELECT elements, types FROM cards")
+    suspend fun facets(): List<CardFacets>
+
+    @Query("SELECT * FROM editions WHERE prefixNorm = :prefixNorm")
+    suspend fun editionsInSet(prefixNorm: String): List<CachedEdition>
 
     @Query("SELECT uuid, slug, name FROM cards")
     suspend fun allNames(): List<CardName>
@@ -133,7 +173,7 @@ interface ArtHashDao {
 
 @Database(
     entities = [CachedCard::class, CachedEdition::class, CachedPrice::class, ArtHash::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class CacheDatabase : RoomDatabase() {

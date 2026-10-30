@@ -36,6 +36,8 @@ enum class DeckSection(val label: String) {
     MATERIAL("Material deck"),
     MAIN("Main deck"),
     SIDEBOARD("Sideboard"),
+    /** Pantheon only: one Lesser and one Greater Boon. */
+    BOONS("Boons"),
 }
 
 @Entity(
