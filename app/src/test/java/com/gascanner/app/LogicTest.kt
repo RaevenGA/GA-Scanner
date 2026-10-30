@@ -229,8 +229,8 @@ class PantheonRulesTest {
 
     private val info = mapOf(
         "champ" to card("champ", listOf("CHAMPION"), level = 0),
-        "lesser" to card("lesser", listOf("BOON"), listOf("LESSER")),
-        "greater" to card("greater", listOf("BOON"), listOf("GREATER")),
+        "lesser" to card("lesser", listOf("LESSER BOON")),
+        "greater" to card("greater", listOf("GREATER BOON")),  // real database types
     ) + (1..11).associate { "reg$it" to card("reg$it", listOf("REGALIA")) } +
         (1..60).associate { "m$it" to card("m$it", listOf("ACTION")) }
 
