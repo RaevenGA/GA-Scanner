@@ -19,9 +19,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -30,6 +33,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.gascanner.app.i18n.LocalStrings
+import com.gascanner.app.i18n.Strings
 import com.gascanner.app.ui.card.CardDetailScreen
 import com.gascanner.app.ui.collection.CollectionScreen
 import com.gascanner.app.ui.decks.DeckDetailScreen
@@ -43,7 +48,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { GATheme { AppRoot() } }
+        setContent {
+            val strings by appContainer().strings.collectAsStateWithLifecycle()
+            CompositionLocalProvider(LocalStrings provides strings) {
+                GATheme { AppRoot() }
+            }
+        }
     }
 }
 
@@ -62,14 +72,14 @@ private object Routes {
     fun deck(id: Long) = "deck/$id"
 }
 
-private data class Tab(val route: String, val label: String, val icon: ImageVector)
+private data class Tab(val route: String, val label: (Strings) -> String, val icon: ImageVector)
 
 private val tabs = listOf(
-    Tab(Routes.SEARCH, "Cards", Icons.Default.Search),
-    Tab(Routes.SCAN, "Scan", Icons.Default.CameraAlt),
-    Tab(Routes.COLLECTION, "Collection", Icons.Default.CollectionsBookmark),
-    Tab(Routes.DECKS, "Decks", Icons.Default.Style),
-    Tab(Routes.SETTINGS, "Settings", Icons.Default.Settings),
+    Tab(Routes.SEARCH, { it.tabCards }, Icons.Default.Search),
+    Tab(Routes.SCAN, { it.tabScan }, Icons.Default.CameraAlt),
+    Tab(Routes.COLLECTION, { it.tabCollection }, Icons.Default.CollectionsBookmark),
+    Tab(Routes.DECKS, { it.tabDecks }, Icons.Default.Style),
+    Tab(Routes.SETTINGS, { it.tabSettings }, Icons.Default.Settings),
 )
 
 @Composable
@@ -77,6 +87,8 @@ private fun AppRoot() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+    val s = LocalStrings.current
+    val openCard: (String, String?) -> Unit = { slug, edition -> nav.navigate(Routes.card(slug, edition)) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -87,7 +99,7 @@ private fun AppRoot() {
                         selected = currentRoute == tab.route,
                         onClick = { nav.switchTab(tab.route) },
                         icon = { Icon(tab.icon, contentDescription = null) },
-                        label = { Text(tab.label) },
+                        label = { Text(tab.label(s), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     )
                 }
             }
@@ -95,16 +107,13 @@ private fun AppRoot() {
     ) { padding ->
         NavHost(nav, startDestination = Routes.SEARCH, modifier = Modifier.padding(padding)) {
             composable(Routes.SEARCH) {
-                SearchScreen(onOpenCard = { slug -> nav.navigate(Routes.card(slug, null)) })
+                SearchScreen(onOpenCard = { slug -> openCard(slug, null) })
             }
             composable(Routes.SCAN) {
-                ScanScreen(
-                    onOpenCard = { slug, edition -> nav.navigate(Routes.card(slug, edition)) },
-                    onOpenSettings = { nav.switchTab(Routes.SETTINGS) },
-                )
+                ScanScreen(onOpenCard = openCard, onOpenSettings = { nav.switchTab(Routes.SETTINGS) })
             }
             composable(Routes.COLLECTION) {
-                CollectionScreen(onOpenCard = { slug, edition -> nav.navigate(Routes.card(slug, edition)) })
+                CollectionScreen(onOpenCard = openCard)
             }
             composable(Routes.DECKS) {
                 DecksScreen(onOpenDeck = { nav.navigate(Routes.deck(it)) })
@@ -136,7 +145,7 @@ private fun AppRoot() {
                 DeckDetailScreen(
                     deckId = entry.arguments?.getLong("deckId") ?: 0L,
                     onBack = { nav.popBackStack() },
-                    onOpenCard = { slug, edition -> nav.navigate(Routes.card(slug, edition)) },
+                    onOpenCard = openCard,
                     onAddCards = { nav.switchTab(Routes.SEARCH) },
                 )
             }

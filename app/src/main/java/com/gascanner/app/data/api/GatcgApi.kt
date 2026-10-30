@@ -3,6 +3,11 @@ package com.gascanner.app.data.api
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -16,12 +21,16 @@ class GatcgApi(private val client: OkHttpClient, private val json: Json) {
 
     private val base: HttpUrl = BASE.toHttpUrl()
 
-    suspend fun search(name: String, page: Int = 1): SearchResponse {
-        val url = base.newBuilder()
-            .addPathSegments("cards/search")
-            .addQueryParameter("name", name)
-            .addQueryParameter("page", page.toString())
-            .build()
+    suspend fun search(name: String, page: Int = 1, pageSize: Int = 30): SearchResponse =
+        searchPage(mapOf("name" to listOf(name)), page, pageSize)
+
+    /** Generic /cards/search call; array parameters are repeated. */
+    suspend fun searchPage(params: Map<String, List<String>>, page: Int, pageSize: Int = MAX_PAGE_SIZE): SearchResponse {
+        val url = base.newBuilder().addPathSegments("cards/search").apply {
+            params.forEach { (k, values) -> values.forEach { addQueryParameter(k, it) } }
+            addQueryParameter("page", page.toString())
+            addQueryParameter("page_size", pageSize.toString())
+        }.build()
         return json.decodeFromString(SearchResponse.serializer(), get(url))
     }
 
@@ -44,6 +53,29 @@ class GatcgApi(private val client: OkHttpClient, private val json: Json) {
         }
     }
 
+    /** All set prefixes known to the API, from /option/search (used as a fallback for full sync). */
+    suspend fun setPrefixes(): List<String> {
+        val root = json.parseToJsonElement(get(base.newBuilder().addPathSegments("option/search").build()))
+        val obj = root as? JsonObject ?: return emptyList()
+        val entry = obj.entries.firstOrNull { it.key.equals("prefix", true) }
+            ?: obj.entries.firstOrNull { it.key.contains("prefix", true) }
+            ?: obj.entries.firstOrNull { it.key.equals("set", true) }
+            ?: return emptyList()
+        return valuesOf(entry.value)
+    }
+
+    private fun valuesOf(e: JsonElement): List<String> = when (e) {
+        is JsonArray -> e.mapNotNull { item ->
+            when (item) {
+                is JsonPrimitive -> item.contentOrNull
+                is JsonObject -> (item["value"] as? JsonPrimitive)?.contentOrNull
+                    ?: (item["prefix"] as? JsonPrimitive)?.contentOrNull
+                else -> null
+            }
+        }
+        else -> emptyList()
+    }
+
     private suspend fun get(url: HttpUrl): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).header("Accept", "application/json").build()
         client.newCall(request).execute().use { response ->
@@ -57,6 +89,7 @@ class GatcgApi(private val client: OkHttpClient, private val json: Json) {
 
     companion object {
         const val BASE = "https://api.gatcg.com"
+        const val MAX_PAGE_SIZE = 50
 
         fun imageUrl(path: String?): String? = when {
             path.isNullOrBlank() -> null

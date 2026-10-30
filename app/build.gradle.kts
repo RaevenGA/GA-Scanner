@@ -14,8 +14,8 @@ android {
         applicationId = "com.gascanner.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     // Fixed key so every build (local or GitHub) can update the app already installed on a phone.

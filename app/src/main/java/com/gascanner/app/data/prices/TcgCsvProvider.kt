@@ -40,7 +40,13 @@ class TcgCsvProvider(
         val market: Double? = null,
         val low: Double? = null,
         val mid: Double? = null,
-    )
+    ) {
+        val isFoil: Boolean
+            get() {
+                val st = subType ?: return false
+                return st.contains("foil", ignoreCase = true) && !st.contains("non", ignoreCase = true)
+            }
+    }
 
     @Serializable
     private data class Index(val fetchedAt: Long, val rows: List<Row>)
