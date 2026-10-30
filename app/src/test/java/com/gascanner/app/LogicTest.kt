@@ -219,3 +219,43 @@ class ZarcLinkTest {
         assertEquals("https://zarc.pl/my/{name}", PriceSourceConfig.mergeWithDefaults(custom).first { it.id == "zarc" }.urlTemplate)
     }
 }
+
+class PantheonRulesTest {
+    private fun card(slug: String, types: List<String>, subtypes: List<String> = emptyList(), level: Int? = null) = CardDto(
+        uuid = slug, slug = slug, name = slug, types = types, subtypes = subtypes, level = level?.let { JsonPrimitive(it) },
+    )
+    private fun dc(slug: String, section: DeckSection, qty: Int = 1) =
+        DeckCard(deckId = 1, section = section.name, cardSlug = slug, cardName = slug, editionUuid = slug, setPrefix = "X", imageUrl = null, quantity = qty)
+
+    private val info = mapOf(
+        "champ" to card("champ", listOf("CHAMPION"), level = 0),
+        "lesser" to card("lesser", listOf("LESSER BOON")),
+        "greater" to card("greater", listOf("GREATER BOON")),  // real database types
+    ) + (1..11).associate { "reg$it" to card("reg$it", listOf("REGALIA")) } +
+        (1..60).associate { "m$it" to card("m$it", listOf("ACTION")) }
+
+    private fun legalDeck() = listOf(dc("champ", DeckSection.MATERIAL)) +
+        (1..11).map { dc("reg$it", DeckSection.MATERIAL) } +
+        (1..60).map { dc("m$it", DeckSection.MAIN) } +
+        listOf(dc("lesser", DeckSection.BOONS), dc("greater", DeckSection.BOONS))
+
+    @Test fun legalPantheonDeck() {
+        val check = DeckValidator.check(GameFormat.PANTHEON, legalDeck(), info)
+        assertTrue(check.issues.toString(), check.legal)
+    }
+
+    @Test fun pantheonProblems() {
+        val deck = legalDeck().filter { it.cardSlug != "greater" && it.cardSlug != "reg1" } +
+            listOf(dc("m1", DeckSection.MAIN), dc("m2", DeckSection.SIDEBOARD))
+        val issues = DeckValidator.check(GameFormat.PANTHEON, deck, info).issues
+        assertTrue(issues.any { it is DeckIssue.TooManyCopies })        // 2 copies of m1
+        assertTrue(issues.any { it is DeckIssue.MaterialNotExact })     // 11 material cards
+        assertTrue(issues.any { it is DeckIssue.NoSideboardAllowed })
+        assertTrue(issues.any { it is DeckIssue.BoonsNeeded })          // no Greater Boon
+    }
+
+    @Test fun standardRejectsBoons() {
+        val issues = DeckValidator.check(GameFormat.STANDARD, listOf(dc("lesser", DeckSection.BOONS)), info).issues
+        assertTrue(issues.any { it is DeckIssue.BoonsOnlyInPantheon })
+    }
+}

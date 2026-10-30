@@ -37,6 +37,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -47,6 +49,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -188,7 +191,23 @@ fun ScanScreen(
         })
     }
 
-    ScreenScaffold(title = s.scanTitle, snackbarHostState = snackbar) { padding ->
+    var torch by remember { mutableStateOf(false) }
+    var hasFlash by remember { mutableStateOf(false) }
+
+    ScreenScaffold(
+        title = s.scanTitle,
+        snackbarHostState = snackbar,
+        actions = {
+            if (granted && hasFlash) {
+                IconButton(onClick = { torch = !torch }) {
+                    Icon(
+                        if (torch) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                        contentDescription = if (torch) s.flashlightOff else s.flashlightOn,
+                    )
+                }
+            }
+        },
+    ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (needsKey && captureMode != CaptureMode.LIVE) {
                 Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
@@ -211,7 +230,7 @@ fun ScanScreen(
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (granted) {
-                    CameraPreview(imageCapture, analysis, Modifier.fillMaxSize())
+                    CameraPreview(imageCapture, analysis, torch, onHasFlash = { hasFlash = it }, modifier = Modifier.fillMaxSize())
                     if (captureMode != CaptureMode.MULTI) {
                         Box(
                             Modifier
@@ -450,9 +469,19 @@ private fun CandidateRow(cand: Candidate, onOpen: (Candidate) -> Unit, trailing:
 }
 
 @Composable
-private fun CameraPreview(imageCapture: ImageCapture, analysis: ImageAnalysis, modifier: Modifier = Modifier) {
+private fun CameraPreview(
+    imageCapture: ImageCapture,
+    analysis: ImageAnalysis,
+    torch: Boolean,
+    onHasFlash: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var camera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
+    LaunchedEffect(camera, torch) {
+        camera?.let { cam -> if (cam.cameraInfo.hasFlashUnit()) cam.cameraControl.enableTorch(torch) }
+    }
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
@@ -471,19 +500,24 @@ private fun CameraPreview(imageCapture: ImageCapture, analysis: ImageAnalysis, m
                     .addUseCase(analysis)
                     .apply { previewView.viewPort?.let { setViewPort(it) } }
                     .build()
-                runCatching {
+                val bound = runCatching {
                     provider?.unbindAll()
                     provider?.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, group)
-                }.onFailure {
+                }.getOrElse {
                     // Some older phones can't run all three at once: drop live analysis.
                     runCatching {
                         provider?.unbindAll()
                         provider?.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
-                    }
+                    }.getOrNull()
                 }
+                camera = bound
+                onHasFlash(bound?.cameraInfo?.hasFlashUnit() == true)
             }
         }, ContextCompat.getMainExecutor(context))
-        onDispose { provider?.unbindAll() }
+        onDispose {
+            camera = null
+            provider?.unbindAll()
+        }
     }
     AndroidView(factory = { previewView }, modifier = modifier)
 }

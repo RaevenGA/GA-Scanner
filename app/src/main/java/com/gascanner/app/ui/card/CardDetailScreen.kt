@@ -162,6 +162,7 @@ fun sectionLabel(s: Strings, section: DeckSection) = when (section) {
     DeckSection.MATERIAL -> s.sectionMaterial
     DeckSection.MAIN -> s.sectionMain
     DeckSection.SIDEBOARD -> s.sectionSideboard
+    DeckSection.BOONS -> s.sectionBoons
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -444,7 +445,7 @@ fun AddToDeckDialog(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DeckSection.entries.forEach { sec ->
                         FilterChip(
                             selected = section == sec,
@@ -455,6 +456,7 @@ fun AddToDeckDialog(
                                         DeckSection.MATERIAL -> s.sectionMaterialShort
                                         DeckSection.MAIN -> s.sectionMainShort
                                         DeckSection.SIDEBOARD -> s.sectionSideboardShort
+                                        DeckSection.BOONS -> s.sectionBoonsShort
                                     }
                                 )
                             },

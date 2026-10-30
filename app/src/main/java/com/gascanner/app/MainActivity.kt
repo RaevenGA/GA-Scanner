@@ -107,7 +107,7 @@ private fun AppRoot() {
     ) { padding ->
         NavHost(nav, startDestination = Routes.SEARCH, modifier = Modifier.padding(padding)) {
             composable(Routes.SEARCH) {
-                SearchScreen(onOpenCard = { slug -> openCard(slug, null) })
+                SearchScreen(onOpenCard = openCard)
             }
             composable(Routes.SCAN) {
                 ScanScreen(onOpenCard = openCard, onOpenSettings = { nav.switchTab(Routes.SETTINGS) })

@@ -58,6 +58,11 @@ data class CardDto(
     val isChampion: Boolean get() = types.any { it.equals("CHAMPION", ignoreCase = true) }
     val isRegalia: Boolean get() = types.any { it.equals("REGALIA", ignoreCase = true) }
 
+    /** Pantheon Boons (Lesser / Greater). */
+    val isBoon: Boolean get() = (types + subtypes).any { it.contains("BOON", ignoreCase = true) }
+    val isLesserBoon: Boolean get() = isBoon && (subtypes + types + listOf(name)).any { it.contains("LESSER", ignoreCase = true) }
+    val isGreaterBoon: Boolean get() = isBoon && (subtypes + types + listOf(name)).any { it.contains("GREATER", ignoreCase = true) }
+
     /** Material deck cards are champions and regalia. */
     val isMaterial: Boolean get() = isChampion || isRegalia
 

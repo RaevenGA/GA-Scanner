@@ -5,6 +5,7 @@ import com.gascanner.app.data.api.EditionDto
 import com.gascanner.app.data.api.GatcgApi
 import com.gascanner.app.data.api.HttpStatusException
 import com.gascanner.app.data.api.SearchResponse
+import com.gascanner.app.data.api.asText
 import com.gascanner.app.data.settings.SettingsRepository
 import com.gascanner.app.util.nameSimilarity
 import com.gascanner.app.util.normalizeName
@@ -39,6 +40,8 @@ sealed interface SyncState {
 }
 
 data class CardHit(val card: CardDto, val edition: EditionDto?)
+
+data class BrowseHit(val card: CardDto, val edition: EditionDto?, val nameMatch: Boolean)
 
 data class CardSearchResult(val cards: List<CardDto>, val hasMore: Boolean, val offline: Boolean)
 
@@ -157,6 +160,11 @@ class CardRepository(
                 name = card.name,
                 nameNorm = normalizeName(card.name),
                 json = json.encodeToString(CardDto.serializer(), card.copy(resultEditions = emptyList())),
+                searchText = searchTextOf(card),
+                tags = " " + (card.elements + listOfNotNull(card.element) + card.types + card.subtypes + card.classes)
+                    .map(::normalizeName).filter { it.isNotBlank() }.distinct().joinToString(" ") + " ",
+                elements = card.elements.ifEmpty { listOfNotNull(card.element) }.joinToString(","),
+                types = card.types.joinToString(","),
             )
         }
         val editions = cards.flatMap { card ->
@@ -170,10 +178,22 @@ class CardRepository(
                     collectorNumber = e.collectorNumber,
                     numberNorm = normalizeNumber(e.collectorNumber),
                     imageUrl = e.imageUrl,
+                    setName = e.set?.name.orEmpty(),
+                    releaseDate = e.set?.releaseDate.orEmpty(),
                 )
             }
         }
         dao.replaceCards(rows, editions)
+    }
+
+    private fun searchTextOf(card: CardDto): String {
+        val parts = buildList {
+            add(card.name)
+            card.effectRaw.asText()?.let(::add)
+            card.allEditions.forEach { e -> e.effectRaw.asText()?.let(::add) }
+            addAll(card.types); addAll(card.subtypes); addAll(card.classes); addAll(card.elements)
+        }
+        return " " + parts.joinToString(" ") { normalizeName(it) } + " "
     }
 
     private fun decode(row: CachedCard): CardDto? =
@@ -197,6 +217,40 @@ class CardRepository(
         }
         val r = api.search(query.trim(), page)
         return CardSearchResult(r.data, hasMore = r.hasMore || r.page < r.totalPages, offline = false)
+    }
+
+    /**
+     * Search by name, rules-text keyword or champion name, optionally within one set and with
+     * element / type filters. Offline only; null when the offline database isn't ready yet.
+     */
+    suspend fun browse(query: String, setPrefixNorm: String?, element: String?, type: String?): List<BrowseHit>? {
+        if (dao.count() == 0) return null
+        val q = normalizeName(query)
+        val pattern = if (q.isBlank()) null else "%" + q.split(' ').joinToString("%") + "%"
+        if (pattern == null && setPrefixNorm == null && element == null && type == null) return emptyList()
+        fun tag(v: String?) = v?.let { "% " + normalizeName(it) + " %" }
+        val rows = dao.browse(pattern, setPrefixNorm, tag(element), tag(type), BROWSE_LIMIT)
+        val setEditions = setPrefixNorm?.let { p -> dao.editionsInSet(p).associateBy { it.cardUuid } }
+        val hits = rows.mapNotNull { row ->
+            val card = decode(row) ?: return@mapNotNull null
+            val edition = setEditions?.get(row.uuid)?.let { e -> card.allEditions.firstOrNull { it.uuid == e.uuid } }
+            BrowseHit(card, edition, nameMatch = q.isNotBlank() && row.nameNorm.contains(q))
+        }
+        return when {
+            // Within a set: collector-number order, like a binder.
+            setPrefixNorm != null && q.isBlank() -> hits.sortedBy { it.edition?.collectorNumber?.filter(Char::isDigit)?.toIntOrNull() ?: Int.MAX_VALUE }
+            // Name matches before rules-text matches.
+            else -> hits.sortedWith(compareBy<BrowseHit>({ !it.nameMatch }, { !it.card.name.lowercase().startsWith(q) }, { it.card.name.lowercase() }))
+        }
+    }
+
+    suspend fun sets(): List<SetInfo> = dao.sets()
+
+    /** Distinct elements and card types present in the database, for the filter menus. */
+    suspend fun facets(): Pair<List<String>, List<String>> {
+        val rows = dao.facets()
+        fun split(s: List<String>) = s.flatMap { it.split(',') }.map { it.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+        return split(rows.map { it.elements }) to split(rows.map { it.types })
     }
 
     suspend fun card(slug: String): CardDto {
@@ -287,6 +341,7 @@ class CardRepository(
     private companion object {
         const val PARALLEL_PAGES = 3
         const val LOCAL_LIMIT = 150
+        const val BROWSE_LIMIT = 400
 
         fun isoDate(ms: Long): String =
             SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))

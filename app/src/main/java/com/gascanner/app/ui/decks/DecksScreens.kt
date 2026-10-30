@@ -224,6 +224,11 @@ fun issueText(s: Strings, issue: DeckIssue): String = when (issue) {
     is DeckIssue.OverLimit -> s.issueOverLimit(issue.cardName, issue.count, issue.limit)
     is DeckIssue.MainHasMaterial -> s.issueMainHasMaterial(issue.cardName)
     is DeckIssue.MaterialHasMain -> s.issueMaterialHasMain(issue.cardName)
+    is DeckIssue.MaterialNotExact -> s.issueMaterialNotExact(issue.count, issue.required)
+    is DeckIssue.NoSideboardAllowed -> s.issueNoSideboard(issue.count)
+    is DeckIssue.BoonsNeeded -> s.issueBoons(issue.lesser, issue.greater)
+    is DeckIssue.BoonsOnlyInPantheon -> s.issueBoonsOnlyPantheon(issue.count)
+    is DeckIssue.BoonInWrongSection -> s.issueBoonWrongSection(issue.cardName)
 }
 
 @Composable

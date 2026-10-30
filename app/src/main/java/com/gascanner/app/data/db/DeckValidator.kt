@@ -16,6 +16,11 @@ sealed interface DeckIssue {
     data class OverLimit(val cardName: String, val count: Int, val limit: Int) : DeckIssue
     data class MainHasMaterial(val cardName: String) : DeckIssue
     data class MaterialHasMain(val cardName: String) : DeckIssue
+    data class MaterialNotExact(val count: Int, val required: Int) : DeckIssue
+    data class NoSideboardAllowed(val count: Int) : DeckIssue
+    data class BoonsNeeded(val lesser: Int, val greater: Int) : DeckIssue
+    data class BoonsOnlyInPantheon(val count: Int) : DeckIssue
+    data class BoonInWrongSection(val cardName: String) : DeckIssue
 }
 
 data class DeckCheck(
@@ -34,6 +39,8 @@ data class DeckCheck(
  * Deck-building rules from the Grand Archive tournament rules (trg.gatcg.com):
  *  Standard: main deck ≥ 60, max 4 copies per card; material deck ≤ 12, one copy each, at least one Lv 0 champion;
  *  sideboard ≤ 15 cards and ≤ 15 points (main-deck cards 1 point, champions/regalia 3 points).
+ *  Pantheon: main deck ≥ 60 with one copy per card; material deck exactly 12 with a Lv 0 champion;
+ *  one Lesser and one Greater Boon; no sideboard.
  *  Draft: main deck ≥ 30, no copy limits.
  *  Banned and restricted cards come from each card's `legality` data in the card database.
  */
@@ -48,33 +55,46 @@ object DeckValidator {
         val sideCount = side.sumOf { it.quantity }
         val unknown = cards.map { it.cardSlug }.distinct().count { it !in info }
 
+        val boons = cards.filter { it.section == DeckSection.BOONS.name }
+        val boonCount = boons.sumOf { it.quantity }
+
         when (format) {
-            GameFormat.STANDARD, GameFormat.PANTHEON -> {
+            GameFormat.STANDARD -> {
                 if (mainCount < 60) issues += DeckIssue.MainTooSmall(mainCount, 60)
                 if (materialCount > 12) issues += DeckIssue.MaterialTooBig(materialCount, 12)
-                val hasLv0 = material.any { info[it.cardSlug]?.let { c -> c.isChampion && c.levelNumber == 0 } == true }
-                if (material.isNotEmpty() && !hasLv0 && material.all { it.cardSlug in info }) {
-                    issues += DeckIssue.NoLevelZeroChampion()
-                }
-                if (material.isEmpty()) issues += DeckIssue.NoLevelZeroChampion()
-                main.groupBy { it.cardName }.forEach { (name, list) ->
-                    val n = list.sumOf { it.quantity }
-                    if (n > 4) issues += DeckIssue.TooManyCopies(name, n, 4)
-                }
-                material.groupBy { it.cardName }.forEach { (name, list) ->
-                    val n = list.sumOf { it.quantity }
-                    if (n > 1) issues += DeckIssue.MaterialDuplicate(name, n)
-                }
+                if (!hasLevelZero(material, info)) issues += DeckIssue.NoLevelZeroChampion()
+                copyLimit(main, 4, issues)
+                materialSingles(material, issues)
                 val points = side.sumOf { c -> c.quantity * (if (info[c.cardSlug]?.isMaterial == true) 3 else 1) }
                 if (sideCount > 15 || points > 15) issues += DeckIssue.SideboardTooBig(sideCount, points)
+                if (boonCount > 0) issues += DeckIssue.BoonsOnlyInPantheon(boonCount)
+            }
+            GameFormat.PANTHEON -> {
+                // Official Pantheon rules: main >= 60 with one copy of each card; material exactly 12
+                // with a level 0 champion; one Lesser + one Greater Boon; no sideboard.
+                if (mainCount < 60) issues += DeckIssue.MainTooSmall(mainCount, 60)
+                if (materialCount != 12) issues += DeckIssue.MaterialNotExact(materialCount, 12)
+                if (!hasLevelZero(material, info)) issues += DeckIssue.NoLevelZeroChampion()
+                copyLimit(main, 1, issues)
+                materialSingles(material, issues)
+                if (sideCount > 0) issues += DeckIssue.NoSideboardAllowed(sideCount)
+                val lesser = boons.filter { info[it.cardSlug]?.isLesserBoon == true }.sumOf { it.quantity }
+                val greater = boons.filter { info[it.cardSlug]?.isGreaterBoon == true }.sumOf { it.quantity }
+                val unknownBoons = boons.any { it.cardSlug !in info }
+                if (!unknownBoons && (lesser != 1 || greater != 1 || boonCount != 2)) issues += DeckIssue.BoonsNeeded(lesser, greater)
             }
             GameFormat.DRAFT -> {
                 if (mainCount < 30) issues += DeckIssue.MainTooSmall(mainCount, 30)
+                if (boonCount > 0) issues += DeckIssue.BoonsOnlyInPantheon(boonCount)
             }
         }
 
+        // Boons belong in their own section, and only there.
+        (main + material + side).forEach { c -> if (info[c.cardSlug]?.isBoon == true) issues += DeckIssue.BoonInWrongSection(c.cardName) }
+        boons.forEach { c -> if (info[c.cardSlug]?.let { !it.isBoon } == true) issues += DeckIssue.BoonInWrongSection(c.cardName) }
+
         // Cards in the wrong section.
-        main.forEach { c -> if (info[c.cardSlug]?.isMaterial == true) issues += DeckIssue.MainHasMaterial(c.cardName) }
+        main.forEach { c -> if (info[c.cardSlug]?.let { it.isMaterial && !it.isBoon } == true) issues += DeckIssue.MainHasMaterial(c.cardName) }
         material.forEach { c -> if (info[c.cardSlug]?.let { !it.isMaterial } == true) issues += DeckIssue.MaterialHasMain(c.cardName) }
 
         // Banned / restricted for this format.
@@ -87,5 +107,26 @@ object DeckValidator {
         }
 
         return DeckCheck(format, issues.distinct(), mainCount, materialCount, sideCount, unknown)
+    }
+
+    private fun hasLevelZero(material: List<DeckCard>, info: Map<String, CardDto>): Boolean {
+        if (material.isEmpty()) return false
+        // Can't tell without card data: don't report a problem we can't verify.
+        if (material.any { it.cardSlug !in info }) return true
+        return material.any { info[it.cardSlug]?.let { c -> c.isChampion && c.levelNumber == 0 } == true }
+    }
+
+    private fun copyLimit(main: List<DeckCard>, max: Int, issues: MutableList<DeckIssue>) {
+        main.groupBy { it.cardName }.forEach { (name, list) ->
+            val n = list.sumOf { it.quantity }
+            if (n > max) issues += DeckIssue.TooManyCopies(name, n, max)
+        }
+    }
+
+    private fun materialSingles(material: List<DeckCard>, issues: MutableList<DeckIssue>) {
+        material.groupBy { it.cardName }.forEach { (name, list) ->
+            val n = list.sumOf { it.quantity }
+            if (n > 1) issues += DeckIssue.MaterialDuplicate(name, n)
+        }
     }
 }
