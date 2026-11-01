@@ -32,6 +32,8 @@ object StringsDe : Strings() {
     override val allSets = "Alle Sets"
     override val filterElement = "Element"
     override val filterType = "Typ"
+    override val filterClass = "Klasse"
+    override val filterSubtype = "Untertyp"
     override val anyValue = "Beliebig"
     override val notOwned = "Nicht im Besitz"
     override val quickAddBuy = "Zur Suchliste hinzufügen"

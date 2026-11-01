@@ -32,6 +32,8 @@ object StringsEs : Strings() {
     override val allSets = "Todas las expansiones"
     override val filterElement = "Elemento"
     override val filterType = "Tipo"
+    override val filterClass = "Clase"
+    override val filterSubtype = "Subtipo"
     override val anyValue = "Cualquiera"
     override val notOwned = "No las tengo"
     override val quickAddBuy = "Añadir a la lista de compra"

@@ -210,13 +210,17 @@ class PriceService(
      */
     suspend fun estimate(item: PricedItem, cached: Map<String, List<CachedPrice>>? = null): Money? {
         val s = settings.current()
-        val rows = cached?.get(item.editionUuid) ?: cache.forEdition(item.editionUuid)
+        // Only sources the user has switched on count; a disabled TCGplayer must not leak into values.
+        val enabledIds = s.priceSources.filter { it.enabled }.map { it.id }.toSet()
+        val tcgOn = PriceSourceConfig.TCGPLAYER_MARKET_ID in enabledIds
+        val rows = (cached?.get(item.editionUuid) ?: cache.forEdition(item.editionUuid)).filter { it.sourceId in enabledIds }
         val sameFoil = rows.filter { it.foil == item.foil }.ifEmpty { rows }
         val defId = s.defaultSource?.id
         sameFoil.firstOrNull { it.sourceId == defId }?.let { return Money(it.amount, it.currency) }
         if (defId != PriceSourceConfig.TCGPLAYER_MARKET_ID) {
             sameFoil.maxByOrNull { it.fetchedAt }?.let { return Money(it.amount, it.currency) }
         }
+        if (!tcgOn) return null
         return runCatching {
             tcgBest(tcg.lookup(item.cardName, item.setPrefix, item.setName, item.collectorNumber),
                 item.setPrefix, item.setName, item.collectorNumber, item.foil)
@@ -296,6 +300,10 @@ class CurrencyConverter(private val client: OkHttpClient, private val json: Json
     private var eurRates: Map<String, Double>? = null
     private var fetchedAt = 0L
 
+    private companion object {
+        val FX_URLS = listOf("https://api.frankfurter.dev/v1/latest", "https://api.frankfurter.app/latest")
+    }
+
     suspend fun convert(amount: Double, from: String, to: String): Double? {
         if (from.equals(to, ignoreCase = true)) return amount
         val rates = rates() ?: return null
@@ -309,10 +317,14 @@ class CurrencyConverter(private val client: OkHttpClient, private val json: Json
         if (eurRates != null && fresh) return@withLock eurRates
         runCatching {
             withContext(Dispatchers.IO) {
-                client.newCall(Request.Builder().url("https://api.frankfurter.app/latest").build()).execute().use {
-                    if (!it.isSuccessful) error("FX ${it.code}")
-                    json.decodeFromString(Rates.serializer(), it.body?.string().orEmpty())
-                }
+                FX_URLS.firstNotNullOfOrNull { url ->
+                    runCatching {
+                        client.newCall(Request.Builder().url(url).build()).execute().use {
+                            if (!it.isSuccessful) error("FX ${it.code}")
+                            json.decodeFromString(Rates.serializer(), it.body?.string().orEmpty()).takeIf { r -> r.rates.isNotEmpty() }
+                        }
+                    }.getOrNull()
+                } ?: error("No exchange rates")
             }
         }.getOrNull()?.let { r ->
             eurRates = r.rates + ("EUR" to 1.0)

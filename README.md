@@ -19,7 +19,7 @@ build decks, manage want-to-sell / want-to-buy lists and check prices in shops.
   - Scanned cards go to *Collection*, *Sell list* or *Buy list* (choose under the camera).
   - Optional *Claude* mode (your own Anthropic API key) for Photo / Several.
 - **Card search & browse** — by name, rules-text keyword (e.g. *taunt*, *floating memory*) or champion
-  (e.g. *Arisanna*); browse a whole set in collector-number order; filter by element and card type;
+  (e.g. *Arisanna*); browse a whole set in collector-number order; filter by element, class, card type and subtype; list or image grid;
   *Not owned* shows only cards you don't have, with one-tap **add to Want to buy**.
 - **Flashlight** button on the scan screen for darker rooms.
 - **Collection** — Owned / Want to sell / Want to buy tabs; quantities per edition and foil;

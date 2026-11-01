@@ -98,11 +98,13 @@ interface CardCacheDao {
           AND (:prefixNorm IS NULL OR uuid IN (SELECT cardUuid FROM editions WHERE prefixNorm = :prefixNorm))
           AND (:tag1 IS NULL OR tags LIKE :tag1)
           AND (:tag2 IS NULL OR tags LIKE :tag2)
+          AND (:tag3 IS NULL OR tags LIKE :tag3)
+          AND (:tag4 IS NULL OR tags LIKE :tag4)
         ORDER BY name COLLATE NOCASE
         LIMIT :limit
         """
     )
-    suspend fun browse(pattern: String?, prefixNorm: String?, tag1: String?, tag2: String?, limit: Int): List<CachedCard>
+    suspend fun browse(pattern: String?, prefixNorm: String?, tag1: String?, tag2: String?, tag3: String?, tag4: String?, limit: Int): List<CachedCard>
 
     @Query(
         """
@@ -114,6 +116,9 @@ interface CardCacheDao {
 
     @Query("SELECT elements, types FROM cards")
     suspend fun facets(): List<CardFacets>
+
+    @Query("SELECT json FROM cards")
+    suspend fun allJson(): List<String>
 
     @Query("SELECT * FROM editions WHERE prefixNorm = :prefixNorm")
     suspend fun editionsInSet(prefixNorm: String): List<CachedEdition>

@@ -223,13 +223,20 @@ class CardRepository(
      * Search by name, rules-text keyword or champion name, optionally within one set and with
      * element / type filters. Offline only; null when the offline database isn't ready yet.
      */
-    suspend fun browse(query: String, setPrefixNorm: String?, element: String?, type: String?): List<BrowseHit>? {
+    suspend fun browse(
+        query: String,
+        setPrefixNorm: String?,
+        element: String?,
+        type: String?,
+        cardClass: String? = null,
+        subtype: String? = null,
+    ): List<BrowseHit>? {
         if (dao.count() == 0) return null
         val q = normalizeName(query)
         val pattern = if (q.isBlank()) null else "%" + q.split(' ').joinToString("%") + "%"
-        if (pattern == null && setPrefixNorm == null && element == null && type == null) return emptyList()
+        if (pattern == null && setPrefixNorm == null && element == null && type == null && cardClass == null && subtype == null) return emptyList()
         fun tag(v: String?) = v?.let { "% " + normalizeName(it) + " %" }
-        val rows = dao.browse(pattern, setPrefixNorm, tag(element), tag(type), BROWSE_LIMIT)
+        val rows = dao.browse(pattern, setPrefixNorm, tag(element), tag(type), tag(cardClass), tag(subtype), BROWSE_LIMIT)
         val setEditions = setPrefixNorm?.let { p -> dao.editionsInSet(p).associateBy { it.cardUuid } }
         val hits = rows.mapNotNull { row ->
             val card = decode(row) ?: return@mapNotNull null
@@ -245,6 +252,20 @@ class CardRepository(
     }
 
     suspend fun sets(): List<SetInfo> = dao.sets()
+
+    /** Champion classes (Warrior, Ranger, Tamer…) and subtypes (Human, Beast, Sword, Spell…) in the database. */
+    suspend fun classesAndSubtypes(): Pair<List<String>, List<String>> = withContext(Dispatchers.Default) {
+        val classes = sortedSetOf<String>()
+        val subtypes = sortedSetOf<String>()
+        dao.allJson().forEach { j ->
+            runCatching { json.decodeFromString(CardDto.serializer(), j) }.getOrNull()?.let { c ->
+                classes += c.classes.filter { it.isNotBlank() }
+                subtypes += c.subtypes.filter { it.isNotBlank() }
+            }
+        }
+        // Classes also show up as subtypes on cards; keep the subtype list to the rest.
+        classes.toList() to (subtypes - classes).toList()
+    }
 
     /** Distinct elements and card types present in the database, for the filter menus. */
     suspend fun facets(): Pair<List<String>, List<String>> {

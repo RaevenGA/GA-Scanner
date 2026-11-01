@@ -32,6 +32,8 @@ object StringsPl : Strings() {
     override val allSets = "Wszystkie dodatki"
     override val filterElement = "Żywioł"
     override val filterType = "Typ"
+    override val filterClass = "Klasa"
+    override val filterSubtype = "Podtyp"
     override val anyValue = "Dowolny"
     override val notOwned = "Nie mam"
     override val quickAddBuy = "Dodaj do listy „Kupię”"

@@ -32,6 +32,8 @@ object StringsFr : Strings() {
     override val allSets = "Toutes les extensions"
     override val filterElement = "Élément"
     override val filterType = "Type"
+    override val filterClass = "Classe"
+    override val filterSubtype = "Sous-type"
     override val anyValue = "Tous"
     override val notOwned = "Non possédées"
     override val quickAddBuy = "Ajouter à la liste d'achat"

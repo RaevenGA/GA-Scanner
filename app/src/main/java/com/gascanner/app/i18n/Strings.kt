@@ -44,6 +44,8 @@ open class Strings {
     open val allSets = "All sets"
     open val filterElement = "Element"
     open val filterType = "Type"
+    open val filterClass = "Class"
+    open val filterSubtype = "Subtype"
     open val anyValue = "Any"
     open val notOwned = "Not owned"
     open fun ownedBadge(n: Int) = "owned $n"
