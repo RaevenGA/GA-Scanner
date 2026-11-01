@@ -130,7 +130,7 @@ fun CardTile(
             } else {
                 Text(title, Modifier.align(Alignment.Center).padding(8.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
             }
-            Badge("×$quantity", Modifier.align(Alignment.TopEnd).padding(4.dp))
+            if (quantity > 0) Badge("×$quantity", Modifier.align(Alignment.TopEnd).padding(4.dp))
             if (foil) Badge("✦", Modifier.align(Alignment.TopStart).padding(4.dp))
             if (price != null) Badge(price, Modifier.align(Alignment.BottomCenter).padding(4.dp))
         }

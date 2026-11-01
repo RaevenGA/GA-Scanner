@@ -14,8 +14,8 @@ android {
         applicationId = "com.gascanner.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.3.1"
 
         // Phones only (ARM); leaves out emulator libraries to keep the APK small.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }

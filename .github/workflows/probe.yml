@@ -1,0 +1,19 @@
+# Temporary diagnostics, removed before merging.
+name: Probe services
+on:
+  push:
+    branches: [claude/**]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          set +e
+          for u in https://api.frankfurter.dev/v1/latest https://api.frankfurter.app/latest; do
+            r=$(curl -sL -m 20 -A "GAScanner/0.3.1 (Android)" -w ' HTTP%{http_code}' "$u" | tail -c 400)
+            echo "::notice title=fx $u::$r"
+          done
+          o=$(curl -s https://api.gatcg.com/option/search)
+          echo "::notice title=classes::$(echo "$o" | jq -c '[.class[]?.value]')"
+          echo "::notice title=subtypes::$(echo "$o" | jq -c '[.subtype[]?.value] | length')"

@@ -148,6 +148,14 @@ fun CardDetailScreen(slug: String, editionUuid: String?, onBack: () -> Unit) {
         }
         AddDialog.DECK -> AddToDeckDialog(
             decks = decks,
+            // Champions and regalia go to the material deck, Boons to their own section.
+            initialSection = state.card?.let {
+                when {
+                    it.isBoon -> DeckSection.BOONS
+                    it.isMaterial -> DeckSection.MATERIAL
+                    else -> DeckSection.MAIN
+                }
+            } ?: DeckSection.MAIN,
             onDismiss = { dialog = null },
             onConfirm = { deckId, newName, section, qty ->
                 vm.addToDeck(deckId, newName, section, qty, sectionLabel(s, section).lowercase())
@@ -412,13 +420,14 @@ fun AddCopiesDialog(
 @Composable
 fun AddToDeckDialog(
     decks: List<DeckWithCount>,
+    initialSection: DeckSection = DeckSection.MAIN,
     onDismiss: () -> Unit,
     onConfirm: (deckId: Long?, newDeckName: String?, section: DeckSection, quantity: Int) -> Unit,
 ) {
     val s = LocalStrings.current
     var selectedDeck by remember { mutableStateOf(decks.firstOrNull()?.deck?.id) }
     var newName by remember { mutableStateOf("") }
-    var section by remember { mutableStateOf(DeckSection.MAIN) }
+    var section by remember { mutableStateOf(initialSection) }
     var qty by remember { mutableIntStateOf(1) }
     AlertDialog(
         onDismissRequest = onDismiss,

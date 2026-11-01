@@ -55,7 +55,15 @@ import com.gascanner.app.data.cache.SetInfo
 import com.gascanner.app.data.cache.SyncState
 import com.gascanner.app.data.lists.TradeListType
 import com.gascanner.app.i18n.LocalStrings
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import com.gascanner.app.data.settings.ViewMode
 import com.gascanner.app.ui.common.CardThumb
+import com.gascanner.app.ui.common.CardTile
+import com.gascanner.app.ui.common.ViewModeButton
 import com.gascanner.app.ui.common.CenteredMessage
 import com.gascanner.app.ui.common.Loading
 import com.gascanner.app.ui.common.ScreenScaffold
@@ -86,9 +94,12 @@ data class Filters(
     val set: SetInfo? = null,
     val element: String? = null,
     val type: String? = null,
+    val cardClass: String? = null,
+    val subtype: String? = null,
     val notOwned: Boolean = false,
 ) {
-    val isEmpty: Boolean get() = query.isBlank() && set == null && element == null && type == null
+    val isEmpty: Boolean
+        get() = query.isBlank() && set == null && element == null && type == null && cardClass == null && subtype == null
 }
 
 data class SearchState(
@@ -116,6 +127,15 @@ class SearchViewModel(private val c: AppContainer) : ViewModel() {
     val elements: StateFlow<List<String>> = _elements.asStateFlow()
     private val _types = MutableStateFlow<List<String>>(emptyList())
     val types: StateFlow<List<String>> = _types.asStateFlow()
+    private val _classes = MutableStateFlow<List<String>>(emptyList())
+    val classes: StateFlow<List<String>> = _classes.asStateFlow()
+    private val _subtypes = MutableStateFlow<List<String>>(emptyList())
+    val subtypes: StateFlow<List<String>> = _subtypes.asStateFlow()
+
+    val viewMode: StateFlow<ViewMode> = c.settings.settings.map { it.viewMode }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ViewMode.LIST)
+
+    fun setViewMode(m: ViewMode) = viewModelScope.launch { c.settings.setViewMode(m) }
 
     /** card slug -> copies owned. */
     val owned: StateFlow<Map<String, Int>> = c.collection.all
@@ -145,6 +165,9 @@ class SearchViewModel(private val c: AppContainer) : ViewModel() {
             val (el, ty) = c.cards.facets()
             _elements.value = el
             _types.value = ty
+            val (cl, st) = c.cards.classesAndSubtypes()
+            _classes.value = cl
+            _subtypes.value = st
         }
     }
 
@@ -171,7 +194,7 @@ class SearchViewModel(private val c: AppContainer) : ViewModel() {
         }
         _state.update { it.copy(loading = true, error = null) }
         try {
-            val local = c.cards.browse(f.query, f.set?.prefixNorm, f.element, f.type)
+            val local = c.cards.browse(f.query, f.set?.prefixNorm, f.element, f.type, f.cardClass, f.subtype)
             val ownedNow = owned.value
             if (local != null) {
                 val rows = local
@@ -213,11 +236,18 @@ fun SearchScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
     val sets by vm.sets.collectAsStateWithLifecycle()
     val elements by vm.elements.collectAsStateWithLifecycle()
     val types by vm.types.collectAsStateWithLifecycle()
+    val classes by vm.classes.collectAsStateWithLifecycle()
+    val subtypes by vm.subtypes.collectAsStateWithLifecycle()
+    val viewMode by vm.viewMode.collectAsStateWithLifecycle()
     val owned by vm.owned.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
 
-    ScreenScaffold(title = s.searchTitle, snackbarHostState = snackbar) { padding ->
+    ScreenScaffold(
+        title = s.searchTitle,
+        snackbarHostState = snackbar,
+        actions = { ViewModeButton(viewMode, vm::setViewMode) },
+    ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             SyncBanner(sync)
             OutlinedTextField(
@@ -251,10 +281,22 @@ fun SearchScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
                     onPick = { picked -> vm.update { it.copy(element = picked) } },
                 )
                 MenuChip(
+                    label = filters.cardClass?.let(::pretty) ?: s.filterClass,
+                    selected = filters.cardClass != null,
+                    options = listOf(null to s.anyValue) + classes.map { it to pretty(it) },
+                    onPick = { picked -> vm.update { it.copy(cardClass = picked) } },
+                )
+                MenuChip(
                     label = filters.type?.let(::pretty) ?: s.filterType,
                     selected = filters.type != null,
                     options = listOf(null to s.anyValue) + types.map { it to pretty(it) },
                     onPick = { picked -> vm.update { it.copy(type = picked) } },
+                )
+                MenuChip(
+                    label = filters.subtype?.let(::pretty) ?: s.filterSubtype,
+                    selected = filters.subtype != null,
+                    options = listOf(null to s.anyValue) + subtypes.map { it to pretty(it) },
+                    onPick = { picked -> vm.update { it.copy(subtype = picked) } },
                 )
                 FilterChip(
                     selected = filters.notOwned,
@@ -268,6 +310,27 @@ fun SearchScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
                 state.loading && state.results.isEmpty() -> Loading()
                 filters.isEmpty -> CenteredMessage(s.searchHint)
                 state.searched && state.results.isEmpty() -> CenteredMessage(s.noCardsFound(filters.query.ifBlank { filters.set?.setName.orEmpty() }))
+                viewMode != ViewMode.LIST -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(viewMode.columns),
+                    contentPadding = PaddingValues(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    item(key = "count", span = { GridItemSpan(maxLineSpan) }) { SmallNote(s.resultsCount(state.results.size)) }
+                    items(state.results, key = { it.card.uuid.ifBlank { it.card.slug } }) { row ->
+                        CardTile(
+                            imageUrl = row.edition?.imageUrl,
+                            title = row.card.name,
+                            quantity = owned[row.card.slug] ?: 0,
+                            foil = false,
+                            price = null,
+                            onClick = { onOpenCard(row.card.slug, row.edition?.uuid) },
+                            // Long-press adds the card to the buy list.
+                            onLongClick = { vm.addToBuy(row) },
+                        )
+                    }
+                }
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     item(key = "count") { SmallNote(s.resultsCount(state.results.size), Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
                     items(state.results, key = { it.card.uuid.ifBlank { it.card.slug } }) { row ->
