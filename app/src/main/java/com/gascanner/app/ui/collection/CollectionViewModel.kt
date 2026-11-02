@@ -110,6 +110,12 @@ class CollectionViewModel(private val c: AppContainer) : ViewModel() {
         }
     }
 
+    fun editOwned(entry: CollectionEntry, e: com.gascanner.app.ui.common.EntryEdit) =
+        viewModelScope.launch { c.collection.edit(entry, e.card, e.edition, e.foil, e.quantity) }
+
+    fun editTrade(entry: TradeEntry, e: com.gascanner.app.ui.common.EntryEdit) =
+        viewModelScope.launch { c.trade.edit(entry, e.card, e.edition, e.foil, e.quantity, e.price, e.currency, e.note) }
+
     fun changeOwned(entry: CollectionEntry, delta: Int) = viewModelScope.launch { c.collection.changeQuantity(entry, delta) }
     fun changeTrade(entry: TradeEntry, delta: Int) = viewModelScope.launch { c.trade.changeQuantity(entry, delta) }
     fun setTradePrice(entry: TradeEntry, price: Double?, currency: String?, note: String) =

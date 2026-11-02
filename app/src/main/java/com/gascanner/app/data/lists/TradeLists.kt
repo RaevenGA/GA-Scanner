@@ -120,5 +120,29 @@ class TradeRepository(private val dao: TradeDao) {
         dao.update(entry.copy(price = price, currency = currency, note = note.trim()))
 
     suspend fun remove(entry: TradeEntry) = dao.delete(entry)
+
+    /** Change printing / foil / quantity / price of an entry; merges into an existing entry for the new printing. */
+    suspend fun edit(
+        entry: TradeEntry, card: CardDto, edition: EditionDto, foil: Boolean, quantity: Int,
+        price: Double?, currency: String?, note: String,
+    ) {
+        if (quantity <= 0) {
+            dao.delete(entry)
+            return
+        }
+        if (entry.editionUuid == edition.uuid && entry.foil == foil) {
+            dao.update(entry.copy(quantity = quantity, price = price, currency = currency, note = note.trim()))
+            return
+        }
+        dao.delete(entry)
+        addRaw(
+            entry.type, card.slug, card.name, edition.uuid, edition.setPrefix, edition.set?.name.orEmpty(),
+            edition.collectorNumber, edition.imageUrl, foil, quantity, price, currency, note.trim(),
+        )
+    }
+
+    suspend fun removeOne(type: TradeListType, editionUuid: String, foil: Boolean) {
+        dao.find(type.name, editionUuid, foil)?.let { changeQuantity(it, -1) }
+    }
     suspend fun clear(type: TradeListType) = dao.clear(type.name)
 }
