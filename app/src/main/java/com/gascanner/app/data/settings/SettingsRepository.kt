@@ -144,7 +144,7 @@ data class PriceSourceConfig(
 enum class ViewMode(val columns: Int) { LIST(1), GRID2(2), GRID3(3) }
 
 /** Where scanned cards are added. */
-enum class AddTarget { COLLECTION, SELL, BUY }
+enum class AddTarget { COLLECTION, SELL, BUY, DECK }
 
 data class AppSettings(
     val language: String = "system",
@@ -158,6 +158,8 @@ data class AppSettings(
     val viewMode: ViewMode = ViewMode.LIST,
     val liveAutoAdd: Boolean = false,
     val scanTarget: AddTarget = AddTarget.COLLECTION,
+    /** Deck that scans go to when the target is DECK (0 = none chosen yet). */
+    val scanDeckId: Long = 0L,
     val lastSyncAt: Long = 0L,
 ) {
     val defaultSource: PriceSourceConfig?
@@ -192,6 +194,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
             liveAutoAdd = p[KEY_LIVE_AUTO_ADD] ?: false,
             scanTarget = p[KEY_SCAN_TARGET]?.let { runCatching { AddTarget.valueOf(it) }.getOrNull() } ?: AddTarget.COLLECTION,
             lastSyncAt = p[KEY_LAST_SYNC] ?: 0L,
+            scanDeckId = p[KEY_SCAN_DECK] ?: 0L,
         )
     }
 
@@ -206,6 +209,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
     suspend fun setViewMode(mode: ViewMode) = store.edit { it[KEY_VIEW_MODE] = mode.name }
     suspend fun setLiveAutoAdd(on: Boolean) = store.edit { it[KEY_LIVE_AUTO_ADD] = on }
     suspend fun setScanTarget(target: AddTarget) = store.edit { it[KEY_SCAN_TARGET] = target.name }
+    suspend fun setScanDeck(id: Long) = store.edit { it[KEY_SCAN_DECK] = id }
     suspend fun setLastSync(ms: Long) = store.edit { it[KEY_LAST_SYNC] = ms }
 
     suspend fun setSources(sources: List<PriceSourceConfig>) = store.edit {
@@ -230,5 +234,6 @@ class SettingsRepository(private val context: Context, private val json: Json) {
         val KEY_LIVE_AUTO_ADD = booleanPreferencesKey("live_auto_add")
         val KEY_SCAN_TARGET = stringPreferencesKey("scan_target")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_at")
+        val KEY_SCAN_DECK = longPreferencesKey("scan_deck_id")
     }
 }

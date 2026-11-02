@@ -92,6 +92,8 @@ object StringsDe : Strings() {
     override val targetCollection = "Sammlung"
     override val targetSell = "Verkaufsliste"
     override val targetBuy = "Suchliste"
+    override val targetDeck = "Deck"
+    override val newDeckEllipsis = "Neues Deck…"
     override val identifying = "Karte wird erkannt…"
     override val couldNotRead = "Karte konnte nicht gelesen werden. Fülle den Rahmen mit einer Karte, vermeide Spiegelungen und halte still."
     override val noMatch = "Keine passende Karte in der Datenbank. Versuch es erneut oder suche nach dem Namen."

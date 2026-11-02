@@ -38,7 +38,7 @@ class ImportExport(
         val rows = CardCsv.readRows(text)
         if (rows.isEmpty()) return ImportResult(0, listOf("No cards found. The file needs a header row with at least a name column."))
         if (replace) when (target) {
-            AddTarget.COLLECTION -> collection.clear()
+            AddTarget.COLLECTION, AddTarget.DECK -> collection.clear()
             AddTarget.SELL -> trade.clear(TradeListType.SELL)
             AddTarget.BUY -> trade.clear(TradeListType.BUY)
         }
@@ -57,7 +57,7 @@ class ImportExport(
                 failed += listOf(row.name, row.setPrefix, row.number).filter { it.isNotBlank() }.joinToString(" ")
             } else {
                 when (target) {
-                    AddTarget.COLLECTION -> collection.add(hit.card, edition, row.foil, row.quantity)
+                    AddTarget.COLLECTION, AddTarget.DECK -> collection.add(hit.card, edition, row.foil, row.quantity)
                     AddTarget.SELL, AddTarget.BUY -> trade.addRaw(
                         if (target == AddTarget.SELL) TradeListType.SELL else TradeListType.BUY,
                         hit.card.slug, hit.card.name, edition.uuid, edition.setPrefix, edition.set?.name.orEmpty(),

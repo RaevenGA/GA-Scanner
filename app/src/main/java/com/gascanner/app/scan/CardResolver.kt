@@ -40,10 +40,17 @@ class CardResolver(private val cards: CardRepository, private val art: ArtMatche
         for (code in codes) {
             val hits = cards.byFooter(code.setPrefix, code.number, allowNetwork)
             // A misread footer can point at another card; if a name was read too, it has to agree.
-            val agreeing = hits.filter { h -> nameQueries.isEmpty() || nameQueries.any { nameSimilarity(it, h.card.name) >= 0.5 } }
+            // A footer whose rarity also matches is trusted even if the name was misread.
+            val agreeing = hits.filter { h ->
+                nameQueries.isEmpty() || nameQueries.any { nameSimilarity(it, h.card.name) >= 0.5 } ||
+                    (code.rarity != null && h.edition?.rarity?.toInt() == code.rarity)
+            }
             if (agreeing.isEmpty()) continue
             val wanted = normalizePrefix(code.setPrefix)
-            agreeing.sortedByDescending { normalizePrefix(it.edition?.setPrefix.orEmpty()) == wanted }
+            agreeing.sortedWith(
+                compareByDescending<com.gascanner.app.data.cache.CardHit> { normalizePrefix(it.edition?.setPrefix.orEmpty()) == wanted }
+                    .thenByDescending { code.rarity != null && it.edition?.rarity?.toInt() == code.rarity }
+            )
                 .forEach { out += Candidate(it.card, it.edition, exact = true) }
             break
         }

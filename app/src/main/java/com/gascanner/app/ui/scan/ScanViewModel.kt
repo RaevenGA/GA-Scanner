@@ -5,7 +5,11 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gascanner.app.AppContainer
+import com.gascanner.app.data.db.DeckSection
+import com.gascanner.app.data.db.DeckWithCount
 import com.gascanner.app.data.lists.TradeListType
+import com.gascanner.app.ui.card.sectionLabel
+import kotlinx.coroutines.flow.first
 import com.gascanner.app.data.settings.AddTarget
 import com.gascanner.app.scan.Candidate
 import com.gascanner.app.scan.CardResolver
@@ -13,7 +17,9 @@ import com.gascanner.app.scan.CardTextParser
 import com.gascanner.app.scan.Capture
 import com.gascanner.app.scan.ScanGuess
 import com.gascanner.app.scan.ScanMode
+import com.gascanner.app.scan.footerStrip
 import com.gascanner.app.scan.guideCrop
+import com.gascanner.app.scan.guideRegion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,7 +103,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
                     _state.value = if (found.isEmpty()) ScanUiState.Error(s.couldNotRead)
                     else ScanUiState.Multi(found, found.indices.toSet())
                 } else {
-                    val guess = recognizer.recognize(capture.jpeg)
+                    val guess = if (scanMode.value == ScanMode.ON_DEVICE) c.onDevice.recognize(capture) else recognizer.recognize(capture.jpeg)
                     if (guess.isEmpty) {
                         _state.value = ScanUiState.Error(s.couldNotRead)
                         return@launch
@@ -142,8 +148,44 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
             AddTarget.COLLECTION -> c.collection.add(candidate.card, edition, foil, 1)
             AddTarget.SELL -> c.trade.add(TradeListType.SELL, candidate.card, edition, foil, 1)
             AddTarget.BUY -> c.trade.add(TradeListType.BUY, candidate.card, edition, foil, 1)
+            AddTarget.DECK -> {
+                val deckId = ensureScanDeck()
+                // Champions and regalia go to the material deck, Boons to their own section.
+                val section = when {
+                    candidate.card.isBoon -> DeckSection.BOONS
+                    candidate.card.isMaterial -> DeckSection.MATERIAL
+                    else -> DeckSection.MAIN
+                }
+                c.decks.addCard(deckId, section, candidate.card, edition, 1)
+                if (!quiet) _messages.tryEmit(s.addedToDeck(1, candidate.card.name, sectionLabel(s, section).lowercase()))
+                return
+            }
         }
         if (!quiet) _messages.tryEmit(s.added("${candidate.card.name} (${edition.label}${if (foil) ", foil" else ""})"))
+    }
+
+    // ---------- Scanning into a deck ----------
+
+    val decks: StateFlow<List<DeckWithCount>> = c.decks.decks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val scanDeckId: StateFlow<Long> = c.settings.settings.map { it.scanDeckId }.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+
+    fun selectDeck(id: Long) = viewModelScope.launch {
+        c.settings.setScanDeck(id)
+        c.settings.setScanTarget(AddTarget.DECK)
+    }
+
+    fun createDeck(name: String) = viewModelScope.launch {
+        val id = c.decks.createDeck(name.ifBlank { s.newDeck })
+        selectDeck(id)
+    }
+
+    /** The chosen deck, or a new one if none is chosen (or it was deleted). */
+    private suspend fun ensureScanDeck(): Long {
+        val id = scanDeckId.value
+        if (id != 0L && c.decks.decks.first().any { it.deck.id == id }) return id
+        val created = c.decks.createDeck(s.newDeck)
+        c.settings.setScanDeck(created)
+        return created
     }
 
     // ---------- Live ----------
@@ -167,7 +209,9 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
         viewModelScope.launch {
             try {
                 val lines = c.onDevice.readLines(frame)
-                val guess = CardTextParser.parse(lines)
+                // Second, enlarged read of the card's footer inside the guide frame.
+                val footer = guideRegion(frame)?.let { runCatching { c.onDevice.readLines(footerStrip(it)) }.getOrNull() }.orEmpty()
+                val guess = CardTextParser.withFooter(CardTextParser.parse(lines), footer)
                 if (guess.isEmpty) {
                     onEmptyFrame(seeingText = lines.isNotEmpty())
                     return@launch
