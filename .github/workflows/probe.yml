@@ -1,0 +1,30 @@
+# Temporary diagnostics, removed before merging.
+name: Probe services
+on:
+  push:
+    branches: [claude/**]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          set +e
+          sudo apt-get -qq install -y tesseract-ocr imagemagick >/dev/null 2>&1
+          A=https://api.gatcg.com
+          i=0
+          for q in "prefix=DOA&page_size=1" "prefix=AMB&page_size=1" "prefix=PRD%201st&page_size=1" "prefix=DTR%20Alter&page_size=1" "prefix=HVN&page_size=1" "name=lorraine&page_size=1"; do
+            r=$(curl -s "$A/cards/search?$q")
+            img=$(echo "$r" | jq -r '.data[0].result_editions[0].image // .data[0].editions[0].image')
+            meta=$(echo "$r" | jq -c '.data[0] | {name, e: [(.result_editions[0] // .editions[0]) | {set: .set.prefix, setname: .set.name, n: .collector_number, rarity, illus: .illustrator}]}')
+            curl -s "$A$img" -o c$i.jpg
+            size=$(identify -format '%wx%h' c$i.jpg)
+            convert c$i.jpg -gravity south -crop 100%x9%+0+0 +repage -resize 400% -colorspace gray -normalize f$i.png
+            convert c$i.jpg -gravity north -crop 100%x12%+0+0 +repage -resize 300% -colorspace gray -normalize t$i.png
+            foot=$(tesseract f$i.png - --psm 6 2>/dev/null | tr '\n' ' ')
+            top=$(tesseract t$i.png - --psm 6 2>/dev/null | tr '\n' ' ')
+            echo "::notice title=card $i::$meta | img $size | TOP: $top | FOOTER: $foot"
+            i=$((i+1))
+          done
+          r=$(curl -s "$A/option/search")
+          echo "::notice title=rarity::$(echo "$r" | jq -c '.rarity')"
