@@ -129,6 +129,7 @@ fun ScanScreen(
     val needsKey by vm.needsApiKey.collectAsStateWithLifecycle()
     val decks by vm.decks.collectAsStateWithLifecycle()
     val scanDeckId by vm.scanDeckId.collectAsStateWithLifecycle()
+    val scanFoil by vm.scanFoil.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -271,6 +272,7 @@ fun ScanScreen(
                             modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
                             onOpen = { onOpenCard(it.card.slug, it.edition?.uuid) },
                             onAddAgain = vm::liveAddAgain,
+                            onUndo = vm::undoLast,
                         )
                     } else if (captureMode == CaptureMode.MULTI && state is ScanUiState.Idle) {
                         Surface(
@@ -306,6 +308,8 @@ fun ScanScreen(
                 scanDeckId = scanDeckId,
                 onSelectDeck = { vm.selectDeck(it) },
                 onCreateDeck = { vm.createDeck(it) },
+                scanFoil = scanFoil,
+                onScanFoil = vm::setScanFoil,
             )
 
             when (val st = state) {
@@ -360,6 +364,8 @@ private fun TargetRow(
     scanDeckId: Long,
     onSelectDeck: (Long) -> Unit,
     onCreateDeck: (String) -> Unit,
+    scanFoil: Boolean,
+    onScanFoil: (Boolean) -> Unit,
 ) {
     val s = LocalStrings.current
     var deckMenu by remember { mutableStateOf(false) }
@@ -391,6 +397,7 @@ private fun TargetRow(
                 DropdownMenuItem(text = { Text(s.newDeckEllipsis) }, onClick = { deckMenu = false; newDeckDialog = true })
             }
         }
+        FilterChip(selected = scanFoil, onClick = { onScanFoil(!scanFoil) }, label = { Text(s.scanAsFoil) })
         if (showAutoAdd) {
             Spacer(Modifier.width(6.dp))
             Text(s.autoAdd, style = MaterialTheme.typography.labelLarge)
@@ -415,6 +422,7 @@ private fun LiveOverlay(
     modifier: Modifier,
     onOpen: (Candidate) -> Unit,
     onAddAgain: () -> Unit,
+    onUndo: () -> Unit,
 ) {
     val s = LocalStrings.current
     val hit = live.hit
@@ -442,6 +450,7 @@ private fun LiveOverlay(
                     )
                     if (!live.seeingText) Text(s.liveLooking, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
                 }
+                if (live.canUndo) TextButton(onClick = onUndo) { Text(s.undo, color = Color.White) }
                 FilledTonalIconButton(onClick = onAddAgain) { Icon(Icons.Default.Add, s.addAgain) }
             }
         }

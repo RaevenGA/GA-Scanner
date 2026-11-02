@@ -39,6 +39,26 @@ class CollectionRepository(private val dao: CollectionDao) {
     }
 
     suspend fun remove(entry: CollectionEntry) = dao.delete(entry)
+
+    /** Change printing / foil / quantity of an entry; merges into an existing entry for the new printing. */
+    suspend fun edit(entry: CollectionEntry, card: CardDto, edition: EditionDto, foil: Boolean, quantity: Int) {
+        if (quantity <= 0) {
+            dao.delete(entry)
+            return
+        }
+        val samePlace = entry.editionUuid == edition.uuid && entry.foil == foil
+        if (samePlace) {
+            dao.update(entry.copy(quantity = quantity))
+            return
+        }
+        dao.delete(entry)
+        add(card, edition, foil, quantity)
+    }
+
+    /** Remove one copy (used to undo a scan). */
+    suspend fun removeOne(editionUuid: String, foil: Boolean) {
+        dao.find(editionUuid, foil)?.let { changeQuantity(it, -1) }
+    }
 }
 
 class DeckRepository(private val dao: DeckDao) {
@@ -69,6 +89,25 @@ class DeckRepository(private val dao: DeckDao) {
                 )
             )
         }
+    }
+
+    /** Change printing / section / quantity of a deck entry; merges into an existing entry. */
+    suspend fun edit(entry: DeckCard, card: CardDto, edition: EditionDto, section: DeckSection, quantity: Int) {
+        if (quantity <= 0) {
+            dao.deleteCard(entry)
+            return
+        }
+        if (entry.editionUuid == edition.uuid && entry.section == section.name) {
+            dao.updateCard(entry.copy(quantity = quantity))
+            return
+        }
+        dao.deleteCard(entry)
+        addCard(entry.deckId, section, card, edition, quantity)
+    }
+
+    /** Remove one copy (used to undo a scan). */
+    suspend fun removeOne(deckId: Long, section: DeckSection, editionUuid: String) {
+        dao.findCard(deckId, section.name, editionUuid)?.let { changeQuantity(it, -1) }
     }
 
     suspend fun changeQuantity(card: DeckCard, delta: Int) {

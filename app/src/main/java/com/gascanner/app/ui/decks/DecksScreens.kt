@@ -191,6 +191,8 @@ class DeckDetailViewModel(private val deckId: Long, private val c: AppContainer)
     fun setFormat(f: GameFormat) = viewModelScope.launch { c.settings.setDeckFormat(deckId, f.name) }
     fun setViewMode(m: ViewMode) = viewModelScope.launch { c.settings.setViewMode(m) }
     fun change(card: DeckCard, delta: Int) = viewModelScope.launch { repo.changeQuantity(card, delta) }
+    fun edit(entry: DeckCard, e: com.gascanner.app.ui.common.EntryEdit) =
+        viewModelScope.launch { repo.edit(entry, e.card, e.edition, e.section ?: DeckSection.MAIN, e.quantity) }
     fun rename(name: String) = viewModelScope.launch { deck.value?.let { repo.renameDeck(it, name) } }
     fun delete(then: () -> Unit) = viewModelScope.launch {
         deck.value?.let { repo.deleteDeck(it) }
@@ -251,6 +253,7 @@ fun DeckDetailScreen(
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<DeckCard?>(null) }
 
     ScreenScaffold(
         title = deck?.name ?: s.decksTitle,
@@ -309,6 +312,7 @@ fun DeckDetailScreen(
                                 Text(card.cardName, style = MaterialTheme.typography.bodyLarge)
                                 SmallNote(card.setPrefix)
                             }
+                            IconButton(onClick = { editing = card }) { Icon(Icons.Default.Edit, s.edit) }
                             QuantityStepper(card.quantity, onChange = { vm.change(card, it) })
                         }
                     }
@@ -336,6 +340,7 @@ fun DeckDetailScreen(
                             foil = false,
                             price = null,
                             onClick = { onOpenCard(card.cardSlug, card.editionUuid) },
+                            onLongClick = { editing = card },
                         )
                     }
                 }
@@ -343,6 +348,19 @@ fun DeckDetailScreen(
         }
     }
 
+    editing?.let { entry ->
+        com.gascanner.app.ui.common.EditEntryDialog(
+            cardSlug = entry.cardSlug,
+            cardName = entry.cardName,
+            editionUuid = entry.editionUuid,
+            foil = null,
+            quantity = entry.quantity,
+            section = runCatching { DeckSection.valueOf(entry.section) }.getOrDefault(DeckSection.MAIN),
+            priceFields = null,
+            onDismiss = { editing = null },
+            onSave = { e -> vm.edit(entry, e); editing = null },
+        )
+    }
     if (renaming) {
         NameDialog(
             title = s.renameDeck,

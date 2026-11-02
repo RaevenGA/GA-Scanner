@@ -71,6 +71,8 @@ import com.gascanner.app.ui.common.CenteredMessage
 import com.gascanner.app.ui.common.QuantityStepper
 import com.gascanner.app.ui.common.ScreenScaffold
 import com.gascanner.app.ui.common.SmallNote
+import com.gascanner.app.ui.common.EditEntryDialog
+import com.gascanner.app.ui.common.PriceFields
 import com.gascanner.app.ui.common.ViewModeButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -114,6 +116,7 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<TradeEntry?>(null) }
+    var editingOwned by remember { mutableStateOf<com.gascanner.app.data.db.CollectionEntry?>(null) }
 
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
 
@@ -234,7 +237,7 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
                             r,
                             onOpen = { onOpenCard(r.slug, r.editionUuid) },
                             onChange = { d -> r.owned?.let { vm.changeOwned(it, d) } ?: r.trade?.let { vm.changeTrade(it, d) } },
-                            onEdit = r.trade?.let { t -> { editing = t } },
+                            onEdit = { r.trade?.let { editing = it } ?: r.owned?.let { editingOwned = it } },
                         )
                         HorizontalDivider()
                     }
@@ -255,7 +258,7 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
                             foil = r.foil,
                             price = r.price?.format(),
                             onClick = { onOpenCard(r.slug, r.editionUuid) },
-                            onLongClick = r.trade?.let { t -> { editing = t } },
+                            onLongClick = { r.trade?.let { editing = it } ?: r.owned?.let { editingOwned = it } },
                         )
                     }
                 }
@@ -285,18 +288,35 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
         )
     }
     editing?.let { entry ->
-        TradePriceDialog(
-            entry = entry,
-            isSell = entry.type == TradeListType.SELL,
-            defaultCurrency = valuation.currency,
+        EditEntryDialog(
+            cardSlug = entry.cardSlug,
+            cardName = entry.cardName,
+            editionUuid = entry.editionUuid,
+            foil = entry.foil,
+            quantity = entry.quantity,
+            section = null,
+            priceFields = PriceFields(entry.type == TradeListType.SELL, entry.price, entry.currency, entry.note, valuation.currency),
             onDismiss = { editing = null },
-            onSave = { price, cur, note -> vm.setTradePrice(entry, price, cur, note); editing = null },
+            onSave = { e -> vm.editTrade(entry, e); editing = null },
+        )
+    }
+    editingOwned?.let { entry ->
+        EditEntryDialog(
+            cardSlug = entry.cardSlug,
+            cardName = entry.cardName,
+            editionUuid = entry.editionUuid,
+            foil = entry.foil,
+            quantity = entry.quantity,
+            section = null,
+            priceFields = null,
+            onDismiss = { editingOwned = null },
+            onSave = { e -> vm.editOwned(entry, e); editingOwned = null },
         )
     }
 }
 
 @Composable
-private fun ListRow(r: EntryRow, onOpen: () -> Unit, onChange: (Int) -> Unit, onEdit: (() -> Unit)?) {
+private fun ListRow(r: EntryRow, onOpen: () -> Unit, onChange: (Int) -> Unit, onEdit: () -> Unit) {
     val s = LocalStrings.current
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
@@ -313,7 +333,7 @@ private fun ListRow(r: EntryRow, onOpen: () -> Unit, onChange: (Int) -> Unit, on
                 SmallNote(line, color = if (r.ownPrice) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (onEdit != null) IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, s.setPrice) }
+        IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, s.edit) }
         QuantityStepper(r.quantity, onChange = onChange)
     }
 }

@@ -50,6 +50,7 @@ data class LiveState(
     /** Increments every time a new card is locked on (used to trigger a vibration). */
     val lockCount: Int = 0,
     val justAdded: Boolean = false,
+    val canUndo: Boolean = false,
     val seeingText: Boolean = false,
 )
 
@@ -134,7 +135,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
         val st = _state.value as? ScanUiState.Multi ?: return
         val picked = st.selected.sorted().mapNotNull { st.candidates.getOrNull(it) }
         viewModelScope.launch {
-            picked.forEach { addToTarget(it, foil = false, quiet = true) }
+            picked.forEach { addToTarget(it, foilIn = false, quiet = true) }
             _messages.tryEmit(s.added("${picked.size}"))
             reset()
         }
@@ -142,8 +143,39 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
 
     fun quickAdd(candidate: Candidate, foil: Boolean) = viewModelScope.launch { addToTarget(candidate, foil) }
 
-    private suspend fun addToTarget(candidate: Candidate, foil: Boolean, quiet: Boolean = false) {
+    /** "Scan as foil": everything added while this is on is recorded as foil. */
+    private val _scanFoil = MutableStateFlow(false)
+    val scanFoil: StateFlow<Boolean> = _scanFoil.asStateFlow()
+    fun setScanFoil(on: Boolean) { _scanFoil.value = on }
+
+    /** What the last add did, so it can be undone or corrected. */
+    private data class AddRecord(val candidate: Candidate, val target: AddTarget, val foil: Boolean, val deckId: Long, val section: DeckSection?)
+    private var lastAdd: AddRecord? = null
+
+    fun undoLast() {
+        val r = lastAdd ?: return
+        lastAdd = null
+        viewModelScope.launch {
+            undo(r)
+            _live.update { it.copy(canUndo = false, justAdded = false) }
+            _messages.tryEmit(s.undone(r.candidate.card.name))
+        }
+    }
+
+    private suspend fun undo(r: AddRecord) {
+        val uuid = r.candidate.edition?.uuid ?: r.candidate.card.editions.firstOrNull()?.uuid ?: return
+        when (r.target) {
+            AddTarget.COLLECTION -> c.collection.removeOne(uuid, r.foil)
+            AddTarget.SELL -> c.trade.removeOne(TradeListType.SELL, uuid, r.foil)
+            AddTarget.BUY -> c.trade.removeOne(TradeListType.BUY, uuid, r.foil)
+            AddTarget.DECK -> r.section?.let { c.decks.removeOne(r.deckId, it, uuid) }
+        }
+    }
+
+    private suspend fun addToTarget(candidate: Candidate, foilIn: Boolean, quiet: Boolean = false) {
         val edition = candidate.edition ?: candidate.card.editions.firstOrNull() ?: return
+        val foil = foilIn || _scanFoil.value
+        lastAdd = AddRecord(candidate, target.value, foil, 0L, null)
         when (target.value) {
             AddTarget.COLLECTION -> c.collection.add(candidate.card, edition, foil, 1)
             AddTarget.SELL -> c.trade.add(TradeListType.SELL, candidate.card, edition, foil, 1)
@@ -157,6 +189,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
                     else -> DeckSection.MAIN
                 }
                 c.decks.addCard(deckId, section, candidate.card, edition, 1)
+                lastAdd = AddRecord(candidate, AddTarget.DECK, foil, deckId, section)
                 if (!quiet) _messages.tryEmit(s.addedToDeck(1, candidate.card.name, sectionLabel(s, section).lowercase()))
                 return
             }
@@ -197,6 +230,9 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
     private var lockedKey: String? = null
     private var lastAddedKey: String? = null
     private var emptyFrames = 0
+    private var lastThumb: IntArray? = null
+    /** Something moved in the frame since the last add: a card was swapped (maybe for an identical one). */
+    private var motionSinceAdd = false
 
     /** Called from the camera thread; true when the next frame should be processed. */
     fun wantsFrame(): Boolean =
@@ -208,9 +244,11 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
         lastFrameAt = SystemClock.elapsedRealtime()
         viewModelScope.launch {
             try {
+                val region = guideRegion(frame)
+                region?.let { detectMotion(it) }
                 val lines = c.onDevice.readLines(frame)
                 // Second, enlarged read of the card's footer inside the guide frame.
-                val footer = guideRegion(frame)?.let { runCatching { c.onDevice.readLines(footerStrip(it)) }.getOrNull() }.orEmpty()
+                val footer = region?.let { runCatching { c.onDevice.readLines(footerStrip(it)) }.getOrNull() }.orEmpty()
                 val guess = CardTextParser.withFooter(CardTextParser.parse(lines), footer)
                 if (guess.isEmpty) {
                     onEmptyFrame(seeingText = lines.isNotEmpty())
@@ -230,7 +268,9 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
                 }
                 // An exact footer match is trusted at once; a name-only read must repeat.
                 val stable = pendingCount >= 2 || (candidate.exact && pendingCount >= 1)
-                if (stable && key != lockedKey) lock(key, candidate, frame)
+                if (!stable) return@launch
+                if (key != lockedKey) lock(key, candidate, frame)
+                maybeAutoAdd(key, candidate)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -252,23 +292,67 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
                 }
             }
         }
-        var added = false
-        if (autoAdd.value && key != lastAddedKey) {
-            addToTarget(candidate, foil = false, quiet = true)
+        _live.update { it.copy(hit = candidate, lockCount = it.lockCount + 1, justAdded = false, seeingText = true) }
+    }
+
+    private suspend fun maybeAutoAdd(key: String, found: Candidate) {
+        if (!autoAdd.value) return
+        val hit = _live.value.hit?.takeIf { (it.edition?.uuid ?: it.card.uuid) == key || it.card.uuid == found.card.uuid } ?: found
+        val previous = lastAdd
+
+        // The same card was just added as another printing, and now the footer gives the exact one:
+        // replace the earlier add instead of adding a second card.
+        if (previous != null && !motionSinceAdd && found.exact && !previous.candidate.exact &&
+            previous.candidate.card.uuid == found.card.uuid && key != lastAddedKey
+        ) {
+            undo(previous)
+            addToTarget(found, foilIn = false, quiet = true)
             lastAddedKey = key
-            added = true
+            _live.update { it.copy(hit = found, justAdded = true, canUndo = true) }
+            _messages.tryEmit(s.corrected(found.card.name, found.edition?.label.orEmpty()))
+            return
         }
-        _live.update { LiveState(hit = candidate, lockCount = it.lockCount + 1, justAdded = added, seeingText = true) }
+
+        val newCard = key != lastAddedKey || motionSinceAdd
+        // Wait for the footer (exact printing) a little longer before adding a name-only read.
+        val confident = found.exact || pendingCount >= 4
+        if (newCard && confident) {
+            addToTarget(hit, foilIn = false, quiet = true)
+            lastAddedKey = key
+            motionSinceAdd = false
+            _live.update { it.copy(justAdded = true, canUndo = true) }
+        }
+    }
+
+    /** Compares a tiny grey thumbnail of the card area with the previous frame. */
+    private fun detectMotion(region: Bitmap) {
+        val small = Bitmap.createScaledBitmap(region, 16, 22, true)
+        val px = IntArray(16 * 22)
+        small.getPixels(px, 0, 16, 0, 0, 16, 22)
+        val grey = IntArray(px.size) { i -> val c = px[i]; (((c shr 16) and 255) * 3 + ((c shr 8) and 255) * 6 + (c and 255)) / 10 }
+        val prev = lastThumb
+        lastThumb = grey
+        if (prev != null) {
+            var diff = 0L
+            for (i in grey.indices) diff += kotlin.math.abs(grey[i] - prev[i])
+            if (diff / grey.size > MOTION_THRESHOLD) {
+                motionSinceAdd = true
+                // Let the same card lock (and be added) again after a swap.
+                lockedKey = null
+                pendingKey = null
+                pendingCount = 0
+            }
+        }
     }
 
     private fun onEmptyFrame(seeingText: Boolean) {
         emptyFrames++
         // Card taken out of view: the same card may be added again next time.
-        if (emptyFrames >= 3) {
+        if (emptyFrames >= 2) {
             pendingKey = null
             pendingCount = 0
             lockedKey = null
-            lastAddedKey = null
+            motionSinceAdd = true
         }
         _live.update { it.copy(seeingText = seeingText, justAdded = false) }
     }
@@ -276,8 +360,9 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
     fun liveAddAgain() {
         val hit = _live.value.hit ?: return
         viewModelScope.launch {
-            addToTarget(hit, foil = false)
+            addToTarget(hit, foilIn = false)
             lastAddedKey = hit.edition?.uuid ?: hit.card.uuid
+            _live.update { it.copy(canUndo = true) }
         }
     }
 
@@ -288,5 +373,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
 
     private companion object {
         const val LIVE_INTERVAL_MS = 350L
+        /** Mean grey-level change (0–255) that counts as the card being moved or swapped. */
+        const val MOTION_THRESHOLD = 28
     }
 }
