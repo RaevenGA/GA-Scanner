@@ -92,6 +92,8 @@ object StringsEs : Strings() {
     override val targetCollection = "Colección"
     override val targetSell = "Venta"
     override val targetBuy = "Compra"
+    override val targetDeck = "Mazo"
+    override val newDeckEllipsis = "Nuevo mazo…"
     override val identifying = "Identificando la carta…"
     override val couldNotRead = "No se pudo leer la carta. Encuadra una sola carta, evita reflejos y no muevas el móvil."
     override val noMatch = "No hay ninguna carta que coincida en la base. Inténtalo de nuevo o busca por nombre."

@@ -43,7 +43,13 @@ data class ScanGuess(
 data class FooterCode(
     @SerialName("set_prefix") val setPrefix: String,
     @SerialName("collector_number") val number: String,
+    /** Rarity as the database numbers it (1 = C … 9 = CPR), when printed after the number. */
+    val rarity: Int? = null,
 )
+
+/** Rarity letters printed on cards, mapped to the database's rarity numbers. */
+val RARITY_CODES = mapOf("C" to 1, "U" to 2, "R" to 3, "SR" to 4, "UR" to 5, "PR" to 6, "CSR" to 7, "CUR" to 8, "CPR" to 9)
+fun rarityLabel(r: Int?): String? = RARITY_CODES.entries.firstOrNull { it.value == r }?.key
 
 enum class ScanMode { ON_DEVICE, CLAUDE }
 

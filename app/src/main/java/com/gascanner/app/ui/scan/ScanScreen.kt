@@ -36,6 +36,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
@@ -48,6 +49,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
@@ -83,6 +88,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gascanner.app.appContainer
+import com.gascanner.app.data.db.DeckWithCount
 import com.gascanner.app.data.settings.AddTarget
 import com.gascanner.app.i18n.LocalStrings
 import com.gascanner.app.scan.CARD_ASPECT
@@ -93,6 +99,7 @@ import com.gascanner.app.scan.OCR_MAX_SIDE
 import com.gascanner.app.scan.ScanMode
 import com.gascanner.app.scan.UPLOAD_MAX_SIDE
 import com.gascanner.app.scan.loadCapture
+import com.gascanner.app.scan.rarityLabel
 import com.gascanner.app.scan.toCapture
 import com.gascanner.app.scan.toUprightBitmap
 import com.gascanner.app.ui.common.CardThumb
@@ -120,6 +127,8 @@ fun ScanScreen(
     val target by vm.target.collectAsStateWithLifecycle()
     val autoAdd by vm.autoAdd.collectAsStateWithLifecycle()
     val needsKey by vm.needsApiKey.collectAsStateWithLifecycle()
+    val decks by vm.decks.collectAsStateWithLifecycle()
+    val scanDeckId by vm.scanDeckId.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -152,6 +161,17 @@ fun ScanScreen(
     }
     val analysis = remember {
         ImageAnalysis.Builder()
+            // Full HD frames so the small footer print is legible (default is 640x480).
+            .setResolutionSelector(
+                androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
+                    .setResolutionStrategy(
+                        androidx.camera.core.resolutionselector.ResolutionStrategy(
+                            android.util.Size(1920, 1080),
+                            androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
+                        )
+                    )
+                    .build()
+            )
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
@@ -282,6 +302,10 @@ fun ScanScreen(
                 showAutoAdd = captureMode == CaptureMode.LIVE,
                 autoAdd = autoAdd,
                 onAutoAdd = { vm.setAutoAdd(it) },
+                decks = decks,
+                scanDeckId = scanDeckId,
+                onSelectDeck = { vm.selectDeck(it) },
+                onCreateDeck = { vm.createDeck(it) },
             )
 
             when (val st = state) {
@@ -332,8 +356,14 @@ private fun TargetRow(
     showAutoAdd: Boolean,
     autoAdd: Boolean,
     onAutoAdd: (Boolean) -> Unit,
+    decks: List<DeckWithCount>,
+    scanDeckId: Long,
+    onSelectDeck: (Long) -> Unit,
+    onCreateDeck: (String) -> Unit,
 ) {
     val s = LocalStrings.current
+    var deckMenu by remember { mutableStateOf(false) }
+    var newDeckDialog by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -343,11 +373,39 @@ private fun TargetRow(
         listOf(AddTarget.COLLECTION to s.targetCollection, AddTarget.SELL to s.targetSell, AddTarget.BUY to s.targetBuy).forEach { (t, label) ->
             FilterChip(selected = target == t, onClick = { onTarget(t) }, label = { Text(label) })
         }
+        Box {
+            val deckName = decks.firstOrNull { it.deck.id == scanDeckId }?.deck?.name
+            FilterChip(
+                selected = target == AddTarget.DECK,
+                onClick = { deckMenu = true },
+                label = { Text(if (target == AddTarget.DECK && deckName != null) "${s.targetDeck}: $deckName" else s.targetDeck, maxLines = 1) },
+                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) },
+            )
+            DropdownMenu(expanded = deckMenu, onDismissRequest = { deckMenu = false }) {
+                decks.forEach { d ->
+                    DropdownMenuItem(
+                        text = { Text("${d.deck.name} (${d.cardCount})") },
+                        onClick = { deckMenu = false; onSelectDeck(d.deck.id) },
+                    )
+                }
+                DropdownMenuItem(text = { Text(s.newDeckEllipsis) }, onClick = { deckMenu = false; newDeckDialog = true })
+            }
+        }
         if (showAutoAdd) {
             Spacer(Modifier.width(6.dp))
             Text(s.autoAdd, style = MaterialTheme.typography.labelLarge)
             Switch(checked = autoAdd, onCheckedChange = onAutoAdd)
         }
+    }
+    if (newDeckDialog) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { newDeckDialog = false },
+            title = { Text(s.newDeck) },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text(s.deckName) }) },
+            confirmButton = { TextButton(onClick = { newDeckDialog = false; onCreateDeck(name) }) { Text(s.save) } },
+            dismissButton = { TextButton(onClick = { newDeckDialog = false }) { Text(s.cancel) } },
+        )
     }
 }
 
@@ -376,7 +434,7 @@ private fun LiveOverlay(
                     Text(hit.card.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         listOfNotNull(
-                            hit.edition?.label,
+                            listOfNotNull(hit.edition?.label, rarityLabel(hit.edition?.rarity?.toInt())).joinToString(" "),
                             if (hit.exact) s.exactMatch else if (hit.artMatched) s.artMatch else null,
                             if (live.justAdded) "✓ " + s.added("") else null,
                         ).joinToString(" · "),
@@ -403,7 +461,7 @@ private fun ResultsPanel(
         SmallNote(
             s.read(
                 g.name.ifBlank { "?" } +
-                    listOfNotNull(g.setPrefix, g.collectorNumber).joinToString(" ").let { if (it.isBlank()) "" else " · $it" } +
+                    listOfNotNull(g.setPrefix, g.collectorNumber, rarityLabel(g.footerCodes.firstOrNull()?.rarity)).joinToString(" ").let { if (it.isBlank()) "" else " · $it" } +
                     if (g.foil == true) " · foil" else ""
             )
         )
@@ -458,7 +516,7 @@ private fun CandidateRow(cand: Candidate, onOpen: (Candidate) -> Unit, trailing:
             Text(cand.card.name, fontWeight = if (cand.exact) FontWeight.SemiBold else FontWeight.Normal)
             SmallNote(
                 listOfNotNull(
-                    cand.edition?.label,
+                    listOfNotNull(cand.edition?.label, rarityLabel(cand.edition?.rarity?.toInt())).joinToString(" "),
                     cand.edition?.set?.name,
                     if (cand.exact) s.exactMatch else if (cand.artMatched) s.artMatch else null,
                 ).joinToString(" · ")

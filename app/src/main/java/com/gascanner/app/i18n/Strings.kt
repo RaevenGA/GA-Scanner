@@ -122,6 +122,8 @@ open class Strings {
     open val targetCollection = "Collection"
     open val targetSell = "Sell list"
     open val targetBuy = "Buy list"
+    open val targetDeck = "Deck"
+    open val newDeckEllipsis = "New deck…"
     open val identifying = "Identifying card…"
     open val couldNotRead = "Couldn't read a card. Fill the frame with one card, avoid glare, and hold steady."
     open val noMatch = "No matching card in the database. Try again, or search by name."

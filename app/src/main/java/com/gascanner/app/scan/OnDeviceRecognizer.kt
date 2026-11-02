@@ -24,6 +24,13 @@ class OnDeviceRecognizer : CardRecognizer {
 
     override suspend fun recognize(jpeg: ByteArray): ScanGuess = CardTextParser.parse(readLines(decode(jpeg)))
 
+    /** Photo: name from the whole picture, footer from a separate enlarged read of the card's bottom strip. */
+    suspend fun recognize(capture: Capture): ScanGuess {
+        val main = CardTextParser.parse(readLines(decode(capture.jpeg)))
+        val footer = capture.footer?.let { runCatching { readLines(it) }.getOrNull() }.orEmpty()
+        return CardTextParser.withFooter(main, footer)
+    }
+
     override suspend fun recognizeMany(jpeg: ByteArray): List<ScanGuess> = CardTextParser.parseMany(readLines(decode(jpeg)))
 
     /** Also used by the live scanner for camera frames. */
@@ -54,8 +61,25 @@ object CardTextParser {
 
     // Set code (2–5 chars, e.g. AMB, DOA, ALC), optional edition marker, then a 1–3 digit number.
     // O/I/L are accepted in the number because OCR often confuses them with 0/1.
-    private val footerRegex =
-        Regex("""\b([A-Z][A-Z0-9]{1,4})\s*(1ST|ALTER|ALT)?\s*[·•\-#:/|.]?\s*([0-9OIL]{1,3})\b""")
+    /*
+     * Real footers look like "AMB · EN-001 C · illust: …", "PRD 1st · EN-004 CSR", "DTR Alter · EN-011 C",
+     * "P25 · EN-001 PR". OCR often turns "1st" into "Ist" and the dots into « ¢ - or *.
+     */
+    private const val SEP = """[\s·•«»¢*.,:;|\-–—~]*"""
+    private val footerRegex = Regex(
+        """\b([A-Z][A-Z0-9]{1,5})""" +                    // set code
+            """(?:\s*(1ST|IST|LST|1S7|ALTER|ALT))?""" +     // edition marker
+            SEP +
+            """\b(EN|JP|JA|CN|ZH|KR|KO|DE|FR|ES|IT|PL|PT|E[NM]|[A-Z]{2})\s*[-–—~]?\s*""" + // language
+            """([0-9OILS]{2,3})\b""" +                          // collector number
+            """(?:\s*(CSR|CUR|CPR|SR|UR|PR|C|U|R)\b)?"""      // rarity
+    )
+
+    /** Older / unexpected layouts: set code directly followed by the number. */
+    private val looseRegex =
+        Regex("""\b([A-Z][A-Z0-9]{1,4})\s*(1ST|IST|ALTER|ALT)?\s*[·•\-#:/|.]?\s*([0-9OIL]{1,3})\b""")
+
+    private val languageCodes = setOf("EN", "JP", "JA", "CN", "ZH", "KR", "KO", "DE", "FR", "ES", "IT", "PL", "PT")
 
     private val noiseWords = setOf(
         "LEVEL", "LV", "POWER", "LIFE", "DUR", "COST", "SPEED", "CLASS", "ILLUS", "ILLUSTRATED",
@@ -109,22 +133,45 @@ object CardTextParser {
         return byFooter + names
     }
 
+    /** Adds footer codes read from a dedicated footer image; those are trusted first. */
+    fun withFooter(guess: ScanGuess, footerLines: List<OcrLine>): ScanGuess {
+        val codes = (footerLines.sortedByDescending { it.bottom }.flatMap { footerCodesIn(it.text) } +
+            // Footer text is sometimes split over two OCR lines: also try the strip as one line.
+            footerCodesIn(footerLines.sortedBy { it.top }.joinToString(" ") { it.text }) +
+            guess.footerCodes).distinct().take(6)
+        val best = codes.firstOrNull()
+        return guess.copy(setPrefix = best?.setPrefix ?: guess.setPrefix, collectorNumber = best?.number ?: guess.collectorNumber, footerCodes = codes)
+    }
+
     fun footerCodesIn(raw: String): List<FooterCode> {
         val text = raw.uppercase()
-        return footerRegex.findAll(text).mapNotNull { m ->
+        val strict = footerRegex.findAll(text).mapNotNull { m ->
             val code = m.groupValues[1]
-            if (code in noiseWords || code.all { it.isDigit() }) return@mapNotNull null
-            val number = m.groupValues[3]
-                .replace('O', '0').replace('I', '1').replace('L', '1')
-            if (!number.all { it.isDigit() }) return@mapNotNull null
-            val edition = when (m.groupValues[2]) {
-                "1ST" -> " 1st"
-                "ALT", "ALTER" -> " Alter"
-                else -> ""
-            }
-            FooterCode(setPrefix = code + edition, number = number.padStart(3, '0'))
+            if (code in noiseWords || code in languageCodes || code.all { it.isDigit() }) return@mapNotNull null
+            val number = fixDigits(m.groupValues[4]) ?: return@mapNotNull null
+            FooterCode(
+                setPrefix = code + editionSuffix(m.groupValues[2]),
+                number = number.padStart(3, '0'),
+                rarity = RARITY_CODES[m.groupValues[5]],
+            )
+        }.toList()
+        if (strict.isNotEmpty()) return strict
+        return looseRegex.findAll(text).mapNotNull { m ->
+            val code = m.groupValues[1]
+            if (code in noiseWords || code in languageCodes || code.all { it.isDigit() }) return@mapNotNull null
+            val number = fixDigits(m.groupValues[3]) ?: return@mapNotNull null
+            FooterCode(setPrefix = code + editionSuffix(m.groupValues[2]), number = number.padStart(3, '0'))
         }.toList()
     }
+
+    private fun editionSuffix(marker: String) = when (marker) {
+        "1ST", "IST", "LST", "1S7" -> " 1st"
+        "ALT", "ALTER" -> " Alter"
+        else -> ""
+    }
+
+    private fun fixDigits(s: String): String? =
+        s.replace('O', '0').replace('I', '1').replace('L', '1').replace('S', '5').takeIf { it.all(Char::isDigit) }
 
     private fun looksLikeName(t: String): Boolean {
         val letters = t.count { it.isLetter() }

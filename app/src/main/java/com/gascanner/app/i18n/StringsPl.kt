@@ -92,6 +92,8 @@ object StringsPl : Strings() {
     override val targetCollection = "Kolekcja"
     override val targetSell = "Sprzedam"
     override val targetBuy = "Kupię"
+    override val targetDeck = "Talia"
+    override val newDeckEllipsis = "Nowa talia…"
     override val identifying = "Rozpoznawanie karty…"
     override val couldNotRead = "Nie udało się odczytać karty. Wypełnij ramkę jedną kartą, unikaj odblasków i trzymaj telefon nieruchomo."
     override val noMatch = "Brak pasującej karty w bazie. Spróbuj ponownie albo wyszukaj po nazwie."

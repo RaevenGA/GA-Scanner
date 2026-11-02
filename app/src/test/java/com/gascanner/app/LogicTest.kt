@@ -259,3 +259,27 @@ class PantheonRulesTest {
         assertTrue(issues.any { it is DeckIssue.BoonsOnlyInPantheon })
     }
 }
+
+class RealFooterTest {
+    // Footer layout from real cards (user photo + database images read by OCR).
+    @Test fun realFooters() {
+        assertEquals(listOf(FooterCode("PRD", "040", 1)), CardTextParser.footerCodesIn("PRD • EN-040 C • illust: Dragonart"))
+        assertEquals(listOf(FooterCode("AMB", "001", 1)), CardTextParser.footerCodesIn("1 3 AMB - EN-001 C « illust: AS ©2024 Weebs of the Shore"))
+        assertEquals(listOf(FooterCode("PRD 1st", "004", 7)), CardTextParser.footerCodesIn("AD PRD Ist « EN-004 CSR ¢ illust: +/& ©2026"))
+        assertEquals(listOf(FooterCode("DTR Alter", "011", 1)), CardTextParser.footerCodesIn("DTR Alter « EN-011 C « illust: AF"))
+        assertEquals(listOf(FooterCode("HVN", "001", 4)), CardTextParser.footerCodesIn("# 15 HVN - EN-001 SR « illust: A+"))
+        assertEquals(listOf(FooterCode("P25", "001", 6)), CardTextParser.footerCodesIn("CyKyp, P25 - EN-001 PR -« illust"))
+    }
+
+    @Test fun languageCodeIsNeverTheSet() {
+        assertTrue(CardTextParser.footerCodesIn("EN-040 C").none { it.setPrefix == "EN" })
+    }
+
+    @Test fun footerFromSeparateStripWins() {
+        val main = CardTextParser.parse(listOf(OcrLine("ChannelTech Charm S", 0, 0, 300, 30)))
+        val merged = CardTextParser.withFooter(main, listOf(OcrLine("PRD • EN-040 C • illust: Dragonart", 0, 0, 900, 40)))
+        assertEquals("PRD", merged.setPrefix)
+        assertEquals("040", merged.collectorNumber)
+        assertEquals("ChannelTech Charm S", merged.name)
+    }
+}

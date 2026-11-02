@@ -22,7 +22,7 @@ const val GUIDE_WIDTH_FRACTION = 0.68f
 const val CARD_ASPECT = 0.716f
 
 /** A photo ready for recognition, plus the card area (used to compare artwork). */
-class Capture(val jpeg: ByteArray, val card: Bitmap?)
+class Capture(val jpeg: ByteArray, val card: Bitmap?, val footer: Bitmap? = null)
 
 /** Upright bitmap of what the user saw in the preview (crop rect + rotation applied). */
 fun ImageProxy.toUprightBitmap(): Bitmap {
@@ -46,17 +46,35 @@ fun ImageProxy.toUprightBitmap(): Bitmap {
 
 fun ImageProxy.toCapture(maxSide: Int): Capture {
     val upright = toUprightBitmap()
-    return Capture(upright.scaled(maxSide).toJpeg(), guideCrop(upright))
+    // The card area and its footer come from the full-resolution photo, before any downscaling.
+    val region = guideRegion(upright)
+    return Capture(upright.scaled(maxSide).toJpeg(), region?.scaled(600), region?.let(::footerStrip))
 }
 
 /** The part of a preview-shaped image inside the on-screen card guide. */
-fun guideCrop(view: Bitmap): Bitmap? {
-    val w = (view.width * GUIDE_WIDTH_FRACTION).roundToInt()
-    val h = min((w / CARD_ASPECT).roundToInt(), view.height)
+fun guideCrop(view: Bitmap): Bitmap? = guideRegion(view)?.scaled(600)
+
+/** The card guide area at full resolution, with a little margin for imperfect framing. */
+fun guideRegion(view: Bitmap): Bitmap? {
+    val w = min((view.width * GUIDE_WIDTH_FRACTION * 1.08f).roundToInt(), view.width)
+    val h = min((view.width * GUIDE_WIDTH_FRACTION / CARD_ASPECT * 1.06f).roundToInt(), view.height)
     if (w <= 0 || h <= 0) return null
     val left = (view.width - w) / 2
     val top = (view.height - h) / 2
-    return Bitmap.createBitmap(view, left, top, w, h).scaled(600)
+    return Bitmap.createBitmap(view, left, top, w, h)
+}
+
+/**
+ * Bottom strip of a card (set code, collector number, rarity), enlarged so the small print is
+ * big enough for text recognition. The strip is generous so a slightly off-centre card still fits.
+ */
+fun footerStrip(card: Bitmap): Bitmap {
+    val top = (card.height * 0.80f).roundToInt().coerceIn(0, card.height - 1)
+    val strip = Bitmap.createBitmap(card, 0, top, card.width, card.height - top)
+    val target = 1800f
+    val factor = (target / strip.width).coerceIn(1f, 3f)
+    return if (factor <= 1.01f) strip
+    else Bitmap.createScaledBitmap(strip, (strip.width * factor).roundToInt(), (strip.height * factor).roundToInt(), true)
 }
 
 /** Loads a gallery image and prepares it the same way. The whole image is treated as the card. */
@@ -69,7 +87,7 @@ fun loadCapture(context: Context, uri: Uri, maxSide: Int): Capture? {
     val bitmap = context.contentResolver.openInputStream(uri)?.use {
         BitmapFactory.decodeStream(it, null, opts)
     } ?: return null
-    return Capture(bitmap.scaled(maxSide).toJpeg(), bitmap.scaled(600))
+    return Capture(bitmap.scaled(maxSide).toJpeg(), bitmap.scaled(600), footerStrip(bitmap))
 }
 
 fun Bitmap.scaled(maxSide: Int): Bitmap {
