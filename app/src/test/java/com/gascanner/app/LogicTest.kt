@@ -359,7 +359,7 @@ class FinishAndRarityTest {
     }
 
     @Test fun tcgplayerPicksCollectorProduct() {
-        val tcg = com.gascanner.app.data.prices.TcgCsvProvider(okhttp3.OkHttpClient(), Json, java.io.File(System.getProperty("java.io.tmpdir")))
+        val tcg = com.gascanner.app.data.prices.TcgCsvProvider(okhttp3.OkHttpClient(), Json, java.io.File(System.getProperty("java.io.tmpdir") ?: "."))
         val common = com.gascanner.app.data.prices.TcgCsvProvider.Row(1, "Dante, Prodigal Swain", "Dawn of Ashes", "DOA", "001", "Common")
         val csr = com.gascanner.app.data.prices.TcgCsvProvider.Row(2, "Dante, Prodigal Swain (CSR)", "Dawn of Ashes", "DOA", "001", "Collector Super Rare")
         assertTrue(tcg.score(csr, "DOA", "Dawn of Ashes", "001", 7) > tcg.score(common, "DOA", "Dawn of Ashes", "001", 7))
