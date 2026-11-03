@@ -1,0 +1,32 @@
+# Temporary diagnostics, removed before merging.
+name: Probe services
+on:
+  push:
+    branches: [claude/**]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          set +e
+          A=https://api.gatcg.com
+          note() { echo "::notice title=$1::$(echo "$2" | head -c 3800 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; }
+          r=$(curl -s "$A/cards/search?name=Dante,%20Prodigal%20Swain&page_size=3")
+          note "dante editions" "$(echo "$r" | jq -c '[.data[0].editions[] | {set: .set.prefix, n: .collector_number, rarity, circ: [.circulations[] | {kind, foil, printing, variants: (.variants|length)}], tmpl: [.circulationTemplates[] | {kind, foil, name, printing}]}]')"
+          r=$(curl -s "$A/cards/search?rarity=8&page_size=2")
+          note "CUR sample" "$(echo "$r" | jq -c '[.data[] | {name, e: [.result_editions[] | {set: .set.prefix, n: .collector_number, rarity, circ: [.circulations[] | {kind, foil}], tmpl: [.circulationTemplates[] | {kind, foil, name}]}]}]')"
+          r=$(curl -s "$A/cards/search?rarity=6&page_size=2")
+          note "PR sample" "$(echo "$r" | jq -c '[.data[] | {name, e: [.result_editions[] | {set: .set.prefix, n: .collector_number, rarity, circ: [.circulations[] | {kind, foil}], tmpl: [.circulationTemplates[] | {kind, foil, name}]}]}]')"
+          r=$(curl -s "$A/cards/search?prefix=PRDG&page_size=2")
+          note "grimoire sample" "$(echo "$r" | jq -c '[.data[] | {name, e: [.result_editions[] | {set: .set.prefix, n: .collector_number, rarity, circ: [.circulations[] | {kind, foil}], tmpl: [.circulationTemplates[] | {kind, foil, name}]}]}]')"
+          UA="GAScanner/0.5 (Android; +https://github.com/RaevenGA/GA-Scanner)"
+          g=$(curl -s -A "$UA" https://tcgcsv.com/tcgplayer/74/groups | jq -c '[.results[] | select(.name|test("asphodel|paradise";"i")) | {groupId, name, abbreviation}]')
+          note "tcg groups" "$g"
+          for gid in $(echo "$g" | jq -r '.[].groupId'); do
+            p=$(curl -s -A "$UA" https://tcgcsv.com/tcgplayer/74/$gid/products | jq -c '[.results[] | select(.name|test("Dante";"i")) | {productId, name, ext: [.extendedData[] | {name, value}]}]')
+            pr=$(curl -s -A "$UA" https://tcgcsv.com/tcgplayer/74/$gid/prices | jq -c --argjson ids "$(echo "$p" | jq '[.[].productId]')" '[.results[] | select(.productId as $x | $ids | index($x)) | {productId, subTypeName, marketPrice}]')
+            note "tcg $gid dante" "$p || $pr"
+          done
+          c=$(curl -s "https://caduko.com/wp-json/wc/store/v1/products?search=dante%20prodigal&per_page=20")
+          note "caduko dante" "$(echo "$c" | jq -c '[.[] | {name, sku, price: .prices.price}]')"
