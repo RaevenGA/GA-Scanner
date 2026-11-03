@@ -12,7 +12,9 @@ class CollectionRepository(private val dao: CollectionDao) {
     suspend fun snapshot(): List<CollectionEntry> = dao.all()
     suspend fun clear() = dao.clear()
 
-    suspend fun add(card: CardDto, edition: EditionDto, foil: Boolean, quantity: Int = 1) {
+    suspend fun add(card: CardDto, edition: EditionDto, foilIn: Boolean, quantity: Int = 1) {
+        // Foil-only printings (collector rarities, promos…) are always foil, non-foil-only never.
+        val foil = edition.fixFoil(foilIn)
         val existing = dao.find(edition.uuid, foil)
         if (existing != null) {
             dao.update(existing.copy(quantity = existing.quantity + quantity))
@@ -41,7 +43,8 @@ class CollectionRepository(private val dao: CollectionDao) {
     suspend fun remove(entry: CollectionEntry) = dao.delete(entry)
 
     /** Change printing / foil / quantity of an entry; merges into an existing entry for the new printing. */
-    suspend fun edit(entry: CollectionEntry, card: CardDto, edition: EditionDto, foil: Boolean, quantity: Int) {
+    suspend fun edit(entry: CollectionEntry, card: CardDto, edition: EditionDto, foilIn: Boolean, quantity: Int) {
+        val foil = edition.fixFoil(foilIn)
         if (quantity <= 0) {
             dao.delete(entry)
             return
@@ -53,6 +56,25 @@ class CollectionRepository(private val dao: CollectionDao) {
         }
         dao.delete(entry)
         add(card, edition, foil, quantity)
+    }
+
+    /**
+     * Corrects entries saved with a finish their printing doesn't exist in (e.g. a CSR saved as
+     * non-foil by older versions), merging them with an existing entry. Returns how many changed.
+     */
+    suspend fun fixFinishes(lookup: suspend (String) -> EditionDto?): Int {
+        var changed = 0
+        for (entry in dao.all()) {
+            val edition = lookup(entry.editionUuid) ?: continue
+            val foil = edition.fixFoil(entry.foil)
+            if (foil == entry.foil) continue
+            dao.delete(entry)
+            val existing = dao.find(entry.editionUuid, foil)
+            if (existing != null) dao.update(existing.copy(quantity = existing.quantity + entry.quantity))
+            else dao.insert(entry.copy(id = 0, foil = foil))
+            changed++
+        }
+        return changed
     }
 
     /** Remove one copy (used to undo a scan). */

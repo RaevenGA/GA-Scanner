@@ -50,7 +50,20 @@ class GAScannerApp : Application(), coil.ImageLoaderFactory {
         c.appScope.launch {
             // Check the card database for updates on every start (downloads it all the first time),
             // then fetch images of any new cards if offline images are on.
-            c.cards.sync(full = false)
+            // 0.5.1 matches collector rarities (CSR, CUR…) separately: forget prices saved before.
+            runCatching {
+                if (c.settings.priceCacheVersion() < 1) {
+                    c.cacheDb.prices().clear()
+                    c.settings.setPriceCacheVersion(1)
+                }
+            }
+            runCatching { c.cards.sync(full = false) }
+            // Foil-only printings (collector rarities, promos…) saved as non-foil, and the reverse.
+            runCatching {
+                val lookup: suspend (String) -> com.gascanner.app.data.api.EditionDto? = { c.cards.byEditionUuid(it)?.edition }
+                c.collection.fixFinishes(lookup)
+                c.trade.fixFinishes(lookup)
+            }
             if (c.settings.current().offlineImages) c.images.downloadAll(c.cards.allImageUrls())
         }
         c.appScope.launch { c.updates.check() }
@@ -95,7 +108,7 @@ class AppContainer(context: Context) {
     private val listsDb: ListsDatabase = Room.databaseBuilder(context, ListsDatabase::class.java, "ga_lists.db").build()
 
     // Re-downloadable data; safe to rebuild.
-    private val cacheDb: CacheDatabase = Room.databaseBuilder(context, CacheDatabase::class.java, "ga_cache.db")
+    val cacheDb: CacheDatabase = Room.databaseBuilder(context, CacheDatabase::class.java, "ga_cache.db")
         .fallbackToDestructiveMigration()
         .build()
 
@@ -106,7 +119,7 @@ class AppContainer(context: Context) {
     val tcgPrices = TcgCsvProvider(http, json, context.cacheDir)
     val stores = StorePriceProvider(http, json)
     val fx = CurrencyConverter(http, json)
-    val prices = PriceService(settings, tcgPrices, stores, fx, cacheDb.prices())
+    val prices = PriceService(settings, tcgPrices, stores, fx, cacheDb.prices()) { uuid -> cards.byEditionUuid(uuid)?.edition }
 
     val onDevice: OnDeviceRecognizer by lazy { OnDeviceRecognizer() }
     private val claudeRecognizer: CardRecognizer = ClaudeVisionRecognizer(http, json, settings)

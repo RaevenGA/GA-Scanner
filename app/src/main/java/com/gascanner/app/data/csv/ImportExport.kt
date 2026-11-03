@@ -61,7 +61,7 @@ class ImportExport(
                     AddTarget.SELL, AddTarget.BUY -> trade.addRaw(
                         if (target == AddTarget.SELL) TradeListType.SELL else TradeListType.BUY,
                         hit.card.slug, hit.card.name, edition.uuid, edition.setPrefix, edition.set?.name.orEmpty(),
-                        edition.collectorNumber, edition.imageUrl, row.foil, row.quantity, row.price, row.currency, row.note,
+                        edition.collectorNumber, edition.imageUrl, edition.fixFoil(row.foil), row.quantity, row.price, row.currency, row.note,
                     )
                 }
                 added += row.quantity

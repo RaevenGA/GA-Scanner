@@ -65,6 +65,8 @@ class PriceService(
     private val stores: StorePriceProvider,
     private val fx: CurrencyConverter,
     private val cache: PriceCacheDao,
+    /** Printing details (rarity, finishes) by edition id, from the offline database. */
+    private val editionLookup: suspend (String) -> EditionDto? = { null },
 ) {
     /** Sources in display order: default first, then the rest as configured. */
     private fun ordered(s: AppSettings): List<PriceSourceConfig> {
@@ -116,9 +118,10 @@ class PriceService(
     private suspend fun tcgQuotes(
         source: PriceSourceConfig, card: CardDto, edition: EditionDto?, foil: Boolean, isDefault: Boolean,
     ): List<PriceQuote> {
-        val rows = tcg.lookup(card.name, edition?.setPrefix, edition?.set?.name, edition?.collectorNumber)
+        val rarity = edition?.rarity?.toInt()
+        val rows = tcg.lookup(card.name, edition?.setPrefix, edition?.set?.name, edition?.collectorNumber, rarity)
         if (rows.isEmpty()) return emptyList()
-        fun score(r: TcgCsvProvider.Row) = tcg.score(r, edition?.setPrefix, edition?.set?.name, edition?.collectorNumber)
+        fun score(r: TcgCsvProvider.Row) = tcg.score(r, edition?.setPrefix, edition?.set?.name, edition?.collectorNumber, rarity)
         val top = score(rows.first())
         val quotes = rows.take(MAX_ROWS).mapNotNull { row ->
             val amount = row.market ?: row.mid ?: row.low ?: return@mapNotNull null
@@ -140,7 +143,7 @@ class PriceService(
             )
         }
         if (edition != null) {
-            tcgBest(rows, edition.setPrefix, edition.set?.name, edition.collectorNumber, foil)?.let {
+            tcgBest(rows, edition.setPrefix, edition.set?.name, edition.collectorNumber, foil, rarity)?.let {
                 cache.put(CachedPrice(edition.uuid, source.id, foil, it.amount, it.currency, null, System.currentTimeMillis()))
             }
         }
@@ -148,11 +151,13 @@ class PriceService(
     }
 
     private fun tcgBest(
-        rows: List<TcgCsvProvider.Row>, prefix: String?, setName: String?, number: String?, foil: Boolean,
+        rows: List<TcgCsvProvider.Row>, prefix: String?, setName: String?, number: String?, foil: Boolean, rarity: Int? = null,
     ): Money? {
         if (rows.isEmpty()) return null
-        val top = tcg.score(rows.first(), prefix, setName, number)
-        val best = rows.filter { tcg.score(it, prefix, setName, number) == top }
+        val top = rows.maxOf { tcg.score(it, prefix, setName, number, rarity) }
+        // A different rarity scores negative: never price a CSR with the common's listing.
+        if (top < 0) return null
+        val best = rows.filter { tcg.score(it, prefix, setName, number, rarity) == top }
         val pick = best.firstOrNull { it.isFoil == foil } ?: best.first()
         val amount = pick.market ?: pick.mid ?: pick.low ?: return null
         return Money(amount, "USD")
@@ -162,7 +167,7 @@ class PriceService(
         source: PriceSourceConfig, card: CardDto, edition: EditionDto?, foil: Boolean, isDefault: Boolean,
     ): List<PriceQuote> {
         val hits = stores.search(source, card.name)
-            .map { it to StorePriceProvider.matchScore(it.matchText, card.name, edition?.setPrefix, edition?.collectorNumber) }
+            .map { it to StorePriceProvider.matchScore(it.matchText, card.name, edition?.setPrefix, edition?.collectorNumber, edition?.rarity?.toInt()) }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<StoreHit, Int>> { it.second }.thenBy { it.first.price })
         val best = bestStoreHit(hits, foil)
@@ -208,8 +213,11 @@ class PriceService(
      * Best known price for one copy, without network calls to shops:
      * cached price from the default source, else any cached price, else TCGplayer.
      */
-    suspend fun estimate(item: PricedItem, cached: Map<String, List<CachedPrice>>? = null): Money? {
+    suspend fun estimate(itemIn: PricedItem, cached: Map<String, List<CachedPrice>>? = null): Money? {
         val s = settings.current()
+        val edition = runCatching { editionLookup(itemIn.editionUuid) }.getOrNull()
+        val item = itemIn.copy(foil = edition?.fixFoil(itemIn.foil) ?: itemIn.foil)
+        val rarity = edition?.rarity?.toInt()
         // Only sources the user has switched on count; a disabled TCGplayer must not leak into values.
         val enabledIds = s.priceSources.filter { it.enabled }.map { it.id }.toSet()
         val tcgOn = PriceSourceConfig.TCGPLAYER_MARKET_ID in enabledIds
@@ -222,8 +230,8 @@ class PriceService(
         }
         if (!tcgOn) return null
         return runCatching {
-            tcgBest(tcg.lookup(item.cardName, item.setPrefix, item.setName, item.collectorNumber),
-                item.setPrefix, item.setName, item.collectorNumber, item.foil)
+            tcgBest(tcg.lookup(item.cardName, item.setPrefix, item.setName, item.collectorNumber, rarity),
+                item.setPrefix, item.setName, item.collectorNumber, item.foil, rarity)
         }.getOrNull() ?: sameFoil.maxByOrNull { it.fetchedAt }?.let { Money(it.amount, it.currency) }
     }
 
@@ -250,8 +258,10 @@ class PriceService(
                 if (e is StoreUnreadableException) throw e
                 emptyList()
             }
-            for (item in group) {
-                val scored = hits.map { it to StorePriceProvider.matchScore(it.matchText, name, item.setPrefix, item.collectorNumber) }
+            for (itemIn in group) {
+                val edition = runCatching { editionLookup(itemIn.editionUuid) }.getOrNull()
+                val item = itemIn.copy(foil = edition?.fixFoil(itemIn.foil) ?: itemIn.foil)
+                val scored = hits.map { it to StorePriceProvider.matchScore(it.matchText, name, item.setPrefix, item.collectorNumber, edition?.rarity?.toInt()) }
                     .filter { it.second > 0 }
                 bestStoreHit(scored, item.foil)?.let {
                     cache.put(CachedPrice(item.editionUuid, source.id, item.foil, it.price, it.currency, it.url, System.currentTimeMillis()))

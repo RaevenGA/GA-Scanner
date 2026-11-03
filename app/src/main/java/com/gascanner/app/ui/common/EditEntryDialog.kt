@@ -25,6 +25,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -95,12 +96,14 @@ fun EditEntryDialog(
                 Text(s.version, style = MaterialTheme.typography.labelLarge)
                 val editions = card?.editions.orEmpty()
                 if (card == null) Loading()
-                editions.forEach { e -> EditionRow(e, selected == e.uuid) { selected = e.uuid } }
+                editions.forEach { e -> EditionRow(e, selected == e.uuid) { selected = e.uuid; isFoil = e.fixFoil(isFoil) } }
 
                 if (foil != null) {
+                    val ed = editions.firstOrNull { it.uuid == selected }
+                    LaunchedEffect(ed?.uuid) { ed?.let { isFoil = it.fixFoil(isFoil) } }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(s.foil, Modifier.weight(1f))
-                        Switch(checked = isFoil, onCheckedChange = { isFoil = it })
+                        Text(com.gascanner.app.ui.card.finishLabel(s, ed), Modifier.weight(1f))
+                        Switch(checked = isFoil, enabled = ed?.hasBothFinishes ?: true, onCheckedChange = { isFoil = it })
                     }
                 }
                 if (section != null) {

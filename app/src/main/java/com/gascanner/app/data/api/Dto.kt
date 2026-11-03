@@ -94,6 +94,30 @@ data class EditionDto(
     val label: String get() = "$setPrefix $collectorNumber".trim()
     val hasFoil: Boolean
         get() = (circulations + circulationTemplates).any { it.foil == true || it.kind.equals("FOIL", ignoreCase = true) }
+
+    /**
+     * Finishes this printing exists in, from the database's print runs: true = foil, false = non-foil.
+     * E.g. CSR / CUR / Grimoire / most promos are foil only; starter-deck printings non-foil only.
+     */
+    val finishes: Set<Boolean>
+        get() = (circulations + circulationTemplates).mapNotNull { c ->
+            when {
+                c.kind.equals("FOIL", ignoreCase = true) -> true
+                c.kind.equals("NONFOIL", ignoreCase = true) -> false
+                else -> c.foil
+            }
+        }.toSet()
+
+    val foilOnly: Boolean get() = finishes == setOf(true)
+    val nonFoilOnly: Boolean get() = finishes == setOf(false)
+    val hasBothFinishes: Boolean get() = finishes.size != 1
+
+    /** The finish a copy must have: forced for single-finish printings, otherwise as chosen. */
+    fun fixFoil(foil: Boolean): Boolean = when {
+        foilOnly -> true
+        nonFoilOnly -> false
+        else -> foil
+    }
 }
 
 @Serializable

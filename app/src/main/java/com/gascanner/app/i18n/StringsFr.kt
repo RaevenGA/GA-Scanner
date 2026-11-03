@@ -209,6 +209,10 @@ object StringsFr : Strings() {
     override val upToDate = "Vous avez la dernière version."
     override val downloadUpdate = "Télécharger la mise à jour"
     override val allReleases = "Toutes les versions"
+    override val updateDialogTitle = "Nouvelle version disponible"
+    override val later = "Plus tard"
+    override val foilOnly = "Foil uniquement"
+    override val nonFoilOnly = "Non-foil uniquement"
     override val compareTitle = "Vérifier la liste de quelqu'un"
     override val theyAreSelling = "Sa liste : à vendre"
     override val theyAreBuying = "Sa liste : recherchées"
@@ -275,5 +279,6 @@ object StringsFr : Strings() {
     override fun imagesFailed(message: String) = "Certaines images n'ont pas pu être téléchargées ($message). Désactivez puis réactivez pour réessayer."
     override fun updateAvailable(version: String) = "La version $version est disponible"
     override fun updateCheckFailed(message: String) = "Impossible de vérifier les mises à jour : $message"
+    override fun updateDialogText(current: String, latest: String) = "GA Scanner $latest est sorti (vous avez $current). Téléchargez le nouvel APK et installez-le par-dessus l'application ; votre collection, vos decks et vos listes sont conservés."
     override fun onMyList(n: Int) = "sur votre liste : $n"
 }

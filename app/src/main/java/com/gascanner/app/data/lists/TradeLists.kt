@@ -82,7 +82,7 @@ class TradeRepository(private val dao: TradeDao) {
     suspend fun add(type: TradeListType, card: CardDto, edition: EditionDto, foil: Boolean, quantity: Int = 1) =
         addRaw(
             type, card.slug, card.name, edition.uuid, edition.setPrefix, edition.set?.name.orEmpty(),
-            edition.collectorNumber, edition.imageUrl, foil, quantity,
+            edition.collectorNumber, edition.imageUrl, edition.fixFoil(foil), quantity,
         )
 
     suspend fun addRaw(
@@ -137,8 +137,24 @@ class TradeRepository(private val dao: TradeDao) {
         dao.delete(entry)
         addRaw(
             entry.type, card.slug, card.name, edition.uuid, edition.setPrefix, edition.set?.name.orEmpty(),
-            edition.collectorNumber, edition.imageUrl, foil, quantity, price, currency, note.trim(),
+            edition.collectorNumber, edition.imageUrl, edition.fixFoil(foil), quantity, price, currency, note.trim(),
         )
+    }
+
+    /** Same as [com.gascanner.app.data.db.CollectionRepository.fixFinishes], for both lists. */
+    suspend fun fixFinishes(lookup: suspend (String) -> EditionDto?): Int {
+        var changed = 0
+        for (type in TradeListType.entries) for (entry in dao.all(type.name)) {
+            val edition = lookup(entry.editionUuid) ?: continue
+            val foil = edition.fixFoil(entry.foil)
+            if (foil == entry.foil) continue
+            dao.delete(entry)
+            val existing = dao.find(type.name, entry.editionUuid, foil)
+            if (existing != null) dao.update(existing.copy(quantity = existing.quantity + entry.quantity))
+            else dao.insert(entry.copy(id = 0, foil = foil))
+            changed++
+        }
+        return changed
     }
 
     suspend fun removeOne(type: TradeListType, editionUuid: String, foil: Boolean) {

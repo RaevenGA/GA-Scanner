@@ -174,7 +174,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
 
     private suspend fun addToTarget(candidate: Candidate, foilIn: Boolean, quiet: Boolean = false) {
         val edition = candidate.edition ?: candidate.card.editions.firstOrNull() ?: return
-        val foil = foilIn || _scanFoil.value
+        val foil = edition.fixFoil(foilIn || _scanFoil.value)
         lastAdd = AddRecord(candidate, target.value, foil, 0L, null)
         when (target.value) {
             AddTarget.COLLECTION -> c.collection.add(candidate.card, edition, foil, 1)
