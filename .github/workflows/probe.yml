@@ -1,0 +1,23 @@
+# Temporary diagnostics, removed before merging.
+name: Probe services
+on:
+  push:
+    branches: [claude/**]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          set +e
+          A=https://api.gatcg.com
+          tot=0; n=0
+          for p in 1 9 17 25 33 41 49; do
+            r=$(curl -s "$A/cards/search?sort=name&page=$p&page_size=50")
+            echo "$r" | jq -r '.data[].editions[].image' >> imgs.txt
+          done
+          eds=$(wc -l < imgs.txt)
+          for img in $(shuf -n 25 imgs.txt); do s=$(curl -s -o /dev/null -w '%{size_download}' "$A$img"); tot=$((tot+s)); n=$((n+1)); done
+          per=$((tot/n))
+          echo "::notice title=images::editions in 7 of 51 pages: $eds -> est total $((eds*51/7)) · avg image $((per/1024)) KB · est total $((eds*51/7*per/1048576)) MB"
+          echo "::notice title=releases::$(curl -s -o /dev/null -w '%{http_code}' https://api.github.com/repos/RaevenGA/GA-Scanner/releases/latest)"
