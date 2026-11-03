@@ -57,6 +57,9 @@ object ListParser {
         leadingQty.find(t)?.let { qty = it.groupValues[1].toInt(); t = it.groupValues[2] }
             ?: trailingQty.find(t)?.let { qty = it.groupValues[2].toInt(); t = it.groupValues[1] }
 
+        // "foil" may come after the version, which is cut off below, so look for it first.
+        if (isFoil(t)) foil = true
+
         // Version written after the name: "Crescent Glaive - AMB 010", "Crescent Glaive AMB 1st 010 foil".
         if (footer == null) {
             val codes = CardTextParser.footerCodesIn(t)
