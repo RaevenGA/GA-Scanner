@@ -5,7 +5,7 @@ collection, build decks, manage trade lists and check prices.
 
 **[Download the latest version →](https://github.com/RaevenGA/GA-Scanner/releases)**
 (open the newest release and install the `.apk` file; Android will ask you to allow installing apps
-from your browser or file manager). The app also tells you when a new version is out.
+from your browser or file manager). The app tells you with a pop-up when a new version is out.
 
 Languages: English · Polski · Deutsch · Français · Español
 
@@ -26,6 +26,7 @@ Languages: English · Polski · Deutsch · Français · Español
   - **Several**: one photo of several cards laid out with their bottom edge visible.
 - **Add to**: Collection, Want to sell, Want to buy, or a **deck**. In a deck, champions and regalia go to the material deck automatically.
 - **Foil** switch for scanning a pile of foils (the camera can't reliably tell foils apart).
+  Printings that only exist as foil (collector rarities CSR / CUR / CPR, promos and others) are always saved as foil, and non-foil-only ones as non-foil.
 - **Flashlight** button for darker rooms.
 - **Artwork matching**: when only the name is readable, the printing is chosen by comparing the artwork with the database images.
 - Optional **Claude** mode (your own Anthropic API key) for Photo and Several.
@@ -52,8 +53,8 @@ Languages: English · Polski · Deutsch · Français · Español
 
 ### Prices
 - **Default shop**, used for all values.
-- **Caduko** (EUR): live prices, matched to the exact set, number and foil.
-- **TCGplayer** market price (USD), updated daily.
+- **Caduko** (EUR): live prices, matched to the exact set, number, rarity and foil.
+- **TCGplayer** market price (USD), updated daily. Collector printings (CSR, CUR…) get their own price, not the common one's.
 - **Zarc** (PLN), **Cardmarket**, TCGplayer and eBay as search links. You can add any shop yourself.
 - Prices shown in PLN, EUR, USD or GBP (European Central Bank rates).
 

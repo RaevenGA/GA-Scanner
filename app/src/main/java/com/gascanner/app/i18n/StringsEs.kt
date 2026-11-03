@@ -209,6 +209,10 @@ object StringsEs : Strings() {
     override val upToDate = "Tienes la última versión."
     override val downloadUpdate = "Descargar actualización"
     override val allReleases = "Todas las versiones"
+    override val updateDialogTitle = "Nueva versión disponible"
+    override val later = "Más tarde"
+    override val foilOnly = "Solo foil"
+    override val nonFoilOnly = "Solo no foil"
     override val compareTitle = "Revisar la lista de alguien"
     override val theyAreSelling = "Su lista: vende"
     override val theyAreBuying = "Su lista: busca"
@@ -275,5 +279,6 @@ object StringsEs : Strings() {
     override fun imagesFailed(message: String) = "No se pudieron descargar algunas imágenes ($message). Desactiva y activa el interruptor para reintentar."
     override fun updateAvailable(version: String) = "La versión $version está disponible"
     override fun updateCheckFailed(message: String) = "No se pudo comprobar si hay actualizaciones: $message"
+    override fun updateDialogText(current: String, latest: String) = "Ya está disponible GA Scanner $latest (tienes $current). Descarga el nuevo APK e instálalo sobre la app actual; tu colección, mazos y listas se conservan."
     override fun onMyList(n: Int) = "en tu lista: $n"
 }

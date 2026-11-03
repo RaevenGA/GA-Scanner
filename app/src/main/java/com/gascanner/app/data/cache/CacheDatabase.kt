@@ -166,6 +166,9 @@ interface PriceCacheDao {
     @Query("SELECT * FROM price_cache")
     suspend fun all(): List<CachedPrice>
 
+    @Query("DELETE FROM price_cache")
+    suspend fun clear()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun put(price: CachedPrice)
 }

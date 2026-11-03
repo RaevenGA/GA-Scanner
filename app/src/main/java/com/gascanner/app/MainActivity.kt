@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,6 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
@@ -118,6 +121,7 @@ private fun AppRoot() {
             }
         },
     ) { padding ->
+        UpdateDialog()
         NavHost(nav, startDestination = Routes.TAB_SEARCH, modifier = Modifier.padding(padding)) {
             fun openCard(tab: String): (String, String?) -> Unit = { slug, edition -> nav.navigate(Routes.card(tab, slug, edition)) }
 
@@ -185,4 +189,36 @@ private fun NavHostController.switchTab(graph: String) {
         launchSingleTop = true
         restoreState = true
     }
+}
+
+/** Pops up once when GitHub has a newer release; "Later" hides it until the next release. */
+@Composable
+private fun UpdateDialog() {
+    val s = LocalStrings.current
+    val c = com.gascanner.app.appContainer()
+    val state by c.updates.state.collectAsStateWithLifecycle()
+    val dismissed by c.settings.dismissedUpdate.collectAsStateWithLifecycle(initialValue = "")
+    var hiddenNow by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    val available = state as? com.gascanner.app.data.update.UpdateState.Available ?: return
+    // "" = setting not loaded yet; null = never dismissed.
+    if (hiddenNow || dismissed == "" || dismissed == available.info.version) return
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun later() {
+        hiddenNow = true
+        scope.launch { c.settings.setDismissedUpdate(available.info.version) }
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { hiddenNow = true },
+        icon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
+        title = { Text(s.updateDialogTitle) },
+        text = { Text(s.updateDialogText(c.updates.currentVersion, available.info.version)) },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                hiddenNow = true
+                uri.openUri(available.info.apkUrl ?: available.info.pageUrl)
+            }) { Text(s.downloadUpdate) }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { later() }) { Text(s.later) } },
+    )
 }

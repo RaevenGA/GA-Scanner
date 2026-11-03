@@ -163,7 +163,10 @@ class StorePriceProvider(private val client: OkHttpClient, private val json: Jso
          * Does this shop listing look like this card? 0 = no, 1 = name matches, 2 = name + set or number.
          * Requires the card name to appear as a whole phrase in the title.
          */
-        fun matchScore(title: String, cardName: String, setPrefix: String?, collectorNumber: String?): Int {
+        fun matchScore(title: String, cardName: String, setPrefix: String?, collectorNumber: String?, rarity: Int? = null): Int {
+            // A listing for another rarity (e.g. the common when looking for the CSR) is not a match.
+            val listed = com.gascanner.app.scan.rarityInListing(title)
+            if (rarity != null && listed != null && listed != rarity) return 0
             val t = " " + normalizeName(title) + " "
             val n = normalizeName(cardName)
             if (n.isEmpty() || !t.contains(" $n ")) return 0

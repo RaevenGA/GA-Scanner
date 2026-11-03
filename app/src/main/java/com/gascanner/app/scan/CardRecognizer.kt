@@ -51,6 +51,23 @@ data class FooterCode(
 val RARITY_CODES = mapOf("C" to 1, "U" to 2, "R" to 3, "SR" to 4, "UR" to 5, "PR" to 6, "CSR" to 7, "CUR" to 8, "CPR" to 9)
 fun rarityLabel(r: Int?): String? = RARITY_CODES.entries.firstOrNull { it.value == r }?.key
 
+private val RARITY_NAMES = mapOf(
+    "COMMON" to 1, "UNCOMMON" to 2, "RARE" to 3, "SUPER RARE" to 4, "ULTRA RARE" to 5,
+    "PROMO" to 6, "PROMO RARE" to 6, "PROMOTIONAL RARE" to 6,
+    "COLLECTOR SUPER RARE" to 7, "COLLECTOR ULTRA RARE" to 8, "COLLECTOR PROMO RARE" to 9,
+)
+
+/** "Collector Super Rare" / "CSR" -> 7. */
+fun rarityFromText(text: String?): Int? = text?.trim()?.uppercase()?.let { RARITY_CODES[it] ?: RARITY_NAMES[it] }
+
+/** Rarity marked in a product title or code: "(CSR)", "[CUR]", "AMB • 10 • C • NF". */
+fun rarityInListing(text: String): Int? {
+    val t = text.uppercase()
+    Regex("""[(\[]\s*(CSR|CUR|CPR|SR|UR|PR)\s*[)\]]""").find(t)?.let { return RARITY_CODES[it.groupValues[1]] }
+    Regex("""[•|]\s*(CSR|CUR|CPR|SR|UR|PR|C|U|R)\s*(?=[•|]|$)""").find(t)?.let { return RARITY_CODES[it.groupValues[1]] }
+    return null
+}
+
 enum class ScanMode { ON_DEVICE, CLAUDE }
 
 class MissingApiKeyException : IOException("Add your Anthropic API key in Settings to scan cards.")

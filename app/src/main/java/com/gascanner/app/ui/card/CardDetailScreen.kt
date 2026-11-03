@@ -135,6 +135,7 @@ fun CardDetailScreen(slug: String, editionUuid: String?, onBack: () -> Unit) {
                     else -> s.addToCollectionTitle
                 },
                 edition = edition,
+                initialFoil = state.foilPrices,
                 onDismiss = { dialog = null },
                 onConfirm = { qty, foil ->
                     when (d) {
@@ -313,7 +314,12 @@ private fun CardDetailContent(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.prices, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                FilterChip(selected = state.foilPrices, onClick = { onFoilPrices(!state.foilPrices) }, label = { Text(s.foil) })
+                FilterChip(
+                    selected = state.foilPrices,
+                    enabled = state.selectedEdition?.hasBothFinishes ?: true,
+                    onClick = { onFoilPrices(!state.foilPrices) },
+                    label = { Text(if (state.selectedEdition?.foilOnly == true) s.foilOnly else if (state.selectedEdition?.nonFoilOnly == true) s.nonFoilOnly else s.foil) },
+                )
                 IconButton(onClick = onRefreshPrices) { Icon(Icons.Default.Refresh, s.refreshPrices) }
             }
             PricesSection(state.prices, state.pricesLoading)
@@ -394,7 +400,7 @@ fun AddCopiesDialog(
 ) {
     val s = LocalStrings.current
     var qty by remember { mutableIntStateOf(1) }
-    var foil by remember { mutableStateOf(initialFoil) }
+    var foil by remember { mutableStateOf(edition.fixFoil(initialFoil)) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -407,8 +413,8 @@ fun AddCopiesDialog(
                     QuantityStepper(qty, onChange = { qty = (qty + it).coerceAtLeast(1) })
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(s.foil, Modifier.weight(1f))
-                    Switch(checked = foil, onCheckedChange = { foil = it })
+                    Text(finishLabel(s, edition), Modifier.weight(1f))
+                    Switch(checked = foil, enabled = edition.hasBothFinishes, onCheckedChange = { foil = it })
                 }
             }
         },
@@ -481,4 +487,11 @@ fun AddToDeckDialog(
         confirmButton = { TextButton(onClick = { onConfirm(selectedDeck, newName, section, qty) }) { Text(s.add) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
     )
+}
+
+/** "Foil", or "Foil only" / "Non-foil only" for printings that exist in one finish. */
+fun finishLabel(s: com.gascanner.app.i18n.Strings, edition: EditionDto?): String = when {
+    edition?.foilOnly == true -> s.foilOnly
+    edition?.nonFoilOnly == true -> s.nonFoilOnly
+    else -> s.foil
 }

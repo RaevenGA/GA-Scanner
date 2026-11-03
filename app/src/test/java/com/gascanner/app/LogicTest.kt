@@ -323,3 +323,46 @@ class VersionTest {
         assertTrue(cmp("v.0.4.10", "0.4.9") > 0)
     }
 }
+
+class FinishAndRarityTest {
+    private fun ed(vararg kinds: String, rarity: Double? = null) = com.gascanner.app.data.api.EditionDto(
+        uuid = "x", rarity = rarity,
+        circulations = kinds.map { com.gascanner.app.data.api.CirculationDto(kind = it) },
+    )
+
+    @Test fun foilOnlyPrintings() {
+        val csr = ed("FOIL", rarity = 7.0)
+        assertTrue(csr.foilOnly)
+        assertTrue(csr.fixFoil(false))
+        val nf = ed("NONFOIL")
+        assertFalse(nf.fixFoil(true))
+        val both = ed("FOIL", "NONFOIL")
+        assertTrue(both.hasBothFinishes)
+        assertFalse(both.fixFoil(false))
+        assertTrue(both.fixFoil(true))
+        // No finish data: leave the choice alone.
+        assertTrue(ed().fixFoil(true))
+    }
+
+    @Test fun rarityInListings() {
+        assertEquals(7, com.gascanner.app.scan.rarityInListing("Dante, Prodigal Swain (CSR)"))
+        assertEquals(8, com.gascanner.app.scan.rarityInListing("Lorraine [CUR]"))
+        assertEquals(1, com.gascanner.app.scan.rarityInListing("Crescent Glaive AMB • 010 • C • NF"))
+        assertEquals(7, com.gascanner.app.scan.rarityInListing("DOA • 001 • CSR • F"))
+        assertNull(com.gascanner.app.scan.rarityInListing("Crescent Glaive"))
+        assertEquals(7, com.gascanner.app.scan.rarityFromText("Collector Super Rare"))
+    }
+
+    @Test fun storeMatchSkipsOtherRarity() {
+        assertEquals(0, StorePriceProvider.matchScore("Dante, Prodigal Swain DOA • 001 • CSR • F", "Dante, Prodigal Swain", "DOA", "001", 1))
+        assertTrue(StorePriceProvider.matchScore("Dante, Prodigal Swain DOA • 001 • CSR • F", "Dante, Prodigal Swain", "DOA", "001", 7) > 0)
+    }
+
+    @Test fun tcgplayerPicksCollectorProduct() {
+        val tcg = com.gascanner.app.data.prices.TcgCsvProvider(okhttp3.OkHttpClient(), Json, java.io.File(System.getProperty("java.io.tmpdir") ?: "."))
+        val common = com.gascanner.app.data.prices.TcgCsvProvider.Row(1, "Dante, Prodigal Swain", "Dawn of Ashes", "DOA", "001", "Common")
+        val csr = com.gascanner.app.data.prices.TcgCsvProvider.Row(2, "Dante, Prodigal Swain (CSR)", "Dawn of Ashes", "DOA", "001", "Collector Super Rare")
+        assertTrue(tcg.score(csr, "DOA", "Dawn of Ashes", "001", 7) > tcg.score(common, "DOA", "Dawn of Ashes", "001", 7))
+        assertTrue(tcg.score(common, "DOA", "Dawn of Ashes", "001", 1) > tcg.score(csr, "DOA", "Dawn of Ashes", "001", 1))
+    }
+}

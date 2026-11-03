@@ -70,7 +70,8 @@ class CardDetailViewModel(
                 val card = c.cards.card(slug)
                 val selected = initialEdition?.takeIf { id -> card.allEditions.any { it.uuid == id } }
                     ?: card.editions.firstOrNull()?.uuid
-                _state.update { it.copy(card = card, loading = false, selectedEditionUuid = selected) }
+                val ed = card.allEditions.firstOrNull { it.uuid == selected }
+                _state.update { it.copy(card = card, loading = false, selectedEditionUuid = selected, foilPrices = ed?.fixFoil(it.foilPrices) ?: it.foilPrices) }
                 loadPrices()
             } catch (e: CancellationException) {
                 throw e
@@ -82,7 +83,13 @@ class CardDetailViewModel(
 
     fun selectEdition(uuid: String) {
         if (uuid == _state.value.selectedEditionUuid) return
-        _state.update { it.copy(selectedEditionUuid = uuid, prices = null) }
+        // Collector rarities, promos and other foil-only printings show foil prices.
+        _state.update { st ->
+            val ed = st.card?.allEditions?.firstOrNull { it.uuid == uuid }
+            // Coming back from a foil-only printing to one with both finishes starts at non-foil again.
+            val keep = st.foilPrices && st.selectedEdition?.hasBothFinishes != false
+            st.copy(selectedEditionUuid = uuid, prices = null, foilPrices = ed?.fixFoil(keep) ?: st.foilPrices)
+        }
         loadPrices()
     }
 

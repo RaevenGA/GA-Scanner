@@ -80,7 +80,7 @@ class TcgCsvProvider(
     val lastUpdated: Long get() = fetchedAt
 
     /** Matching price rows for a card, best match first. */
-    suspend fun lookup(cardName: String, setPrefix: String?, setName: String?, collectorNumber: String?): List<Row> {
+    suspend fun lookup(cardName: String, setPrefix: String?, setName: String?, collectorNumber: String?, rarity: Int? = null): List<Row> {
         val index = ensureIndex()
         val key = normalize(cardName)
         if (key.isEmpty()) return emptyList()
@@ -88,13 +88,17 @@ class TcgCsvProvider(
             .filter { (k, _) -> k == key || k.startsWith("$key ") }
             .flatMap { it.value }
         return candidates
-            .map { it to score(it, setPrefix, setName, collectorNumber) }
+            .map { it to score(it, setPrefix, setName, collectorNumber, rarity) }
             .sortedWith(compareByDescending<Pair<Row, Int>> { it.second }.thenByDescending { it.first.market ?: 0.0 })
             .map { it.first }
     }
 
-    fun score(row: Row, setPrefix: String?, setName: String?, collectorNumber: String?): Int {
+    fun score(row: Row, setPrefix: String?, setName: String?, collectorNumber: String?, rarity: Int? = null): Int {
         var s = 0
+        // Collector printings (CSR, CUR…) are separate products, e.g. "Dante, Prodigal Swain (CSR)",
+        // with the same set group and number as the common one: only the rarity tells them apart.
+        val rowRarity = com.gascanner.app.scan.rarityInListing(row.name) ?: com.gascanner.app.scan.rarityFromText(row.rarity)
+        if (rarity != null && rowRarity != null) s += if (rowRarity == rarity) 4 else -10
         val prefixCore = setPrefix?.substringBefore(' ')?.lowercase().orEmpty()
         if (prefixCore.isNotEmpty() && row.groupAbbr?.lowercase()?.startsWith(prefixCore) == true) s += 2
         val normSet = normalize(setName.orEmpty())

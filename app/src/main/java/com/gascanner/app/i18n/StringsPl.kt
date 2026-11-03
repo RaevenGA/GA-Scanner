@@ -209,6 +209,10 @@ object StringsPl : Strings() {
     override val upToDate = "Masz najnowszą wersję."
     override val downloadUpdate = "Pobierz aktualizację"
     override val allReleases = "Wszystkie wydania"
+    override val updateDialogTitle = "Dostępna nowa wersja"
+    override val later = "Później"
+    override val foilOnly = "Tylko foil"
+    override val nonFoilOnly = "Tylko non-foil"
     override val compareTitle = "Sprawdź czyjąś listę"
     override val theyAreSelling = "Ich lista: sprzedają"
     override val theyAreBuying = "Ich lista: szukają"
@@ -275,6 +279,7 @@ object StringsPl : Strings() {
     override fun imagesFailed(message: String) = "Części obrazów nie udało się pobrać ($message). Wyłącz i włącz przełącznik, żeby spróbować ponownie."
     override fun updateAvailable(version: String) = "Dostępna wersja $version"
     override fun updateCheckFailed(message: String) = "Nie udało się sprawdzić aktualizacji: $message"
+    override fun updateDialogText(current: String, latest: String) = "GA Scanner $latest jest już dostępny (masz $current). Pobierz nowy plik APK i zainstaluj go na obecną aplikację; kolekcja, talie i listy zostaną."
     override fun onMyList(n: Int) = "na Twojej liście: $n"
 
     private fun plural(n: Int, one: String, few: String, many: String) = when {

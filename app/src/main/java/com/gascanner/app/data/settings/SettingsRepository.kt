@@ -213,6 +213,12 @@ class SettingsRepository(private val context: Context, private val json: Json) {
     suspend fun setLiveAutoAdd(on: Boolean) = store.edit { it[KEY_LIVE_AUTO_ADD] = on }
     suspend fun setScanTarget(target: AddTarget) = store.edit { it[KEY_SCAN_TARGET] = target.name }
     suspend fun setOfflineImages(on: Boolean) = store.edit { it[KEY_OFFLINE_IMAGES] = on }
+    /** The newest version the user already said "Later" to, so the pop-up shows once per release. */
+    val dismissedUpdate: Flow<String?> = store.data.map { it[KEY_DISMISSED_UPDATE] }
+    suspend fun setDismissedUpdate(version: String) = store.edit { it[KEY_DISMISSED_UPDATE] = version }
+    /** Bumped when price matching changes, so prices saved by older versions are fetched again. */
+    suspend fun priceCacheVersion(): Int = store.data.first()[KEY_PRICE_CACHE_VERSION] ?: 0
+    suspend fun setPriceCacheVersion(v: Int) = store.edit { it[KEY_PRICE_CACHE_VERSION] = v }
     suspend fun setScanDeck(id: Long) = store.edit { it[KEY_SCAN_DECK] = id }
     suspend fun setLastSync(ms: Long) = store.edit { it[KEY_LAST_SYNC] = ms }
 
@@ -240,5 +246,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_at")
         val KEY_SCAN_DECK = longPreferencesKey("scan_deck_id")
         val KEY_OFFLINE_IMAGES = booleanPreferencesKey("offline_images")
+        val KEY_DISMISSED_UPDATE = stringPreferencesKey("dismissed_update")
+        val KEY_PRICE_CACHE_VERSION = androidx.datastore.preferences.core.intPreferencesKey("price_cache_version")
     }
 }
