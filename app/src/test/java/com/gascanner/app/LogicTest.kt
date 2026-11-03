@@ -283,3 +283,43 @@ class RealFooterTest {
         assertEquals("ChannelTech Charm S", merged.name)
     }
 }
+
+class PastedListTest {
+    private fun p(s: String) = com.gascanner.app.data.compare.ListParser.parseLine(s)
+
+    @Test fun ownShareFormat() {
+        val l = p("2× Lorraine, Wandering Warrior (DOA 1st 001, foil) — 12,00 €")!!
+        assertEquals(2, l.quantity)
+        assertEquals("Lorraine, Wandering Warrior", l.name)
+        assertEquals(FooterCode("DOA 1st", "001"), l.footer)
+        assertTrue(l.foil)
+    }
+
+    @Test fun commonChatFormats() {
+        assertEquals("Crescent Glaive", p("2x Crescent Glaive - AMB 010")!!.name)
+        assertEquals(FooterCode("AMB", "010"), p("2x Crescent Glaive - AMB 010")!!.footer)
+        assertEquals(3, p("Crescent Glaive x3")!!.quantity)
+        assertEquals("Spirit of Fire", p("1 Spirit of Fire")!!.name)
+        assertEquals("Slime Shield", p("- Slime Shield")!!.name)
+        assertEquals("Crescent Glaive", p("Crescent Glaive — ≈ 3,50 zł")!!.name)
+        assertTrue(p("Lorraine, Wandering Warrior - DOA 1st 001 foil")!!.foil)
+    }
+
+    @Test fun skipsHeadersAndTotals() {
+        assertNull(p("WTS — Grand Archive"))
+        assertNull(p("Total: 45,00 €"))
+        assertNull(p("Made with GA Scanner"))
+        assertNull(p(""))
+    }
+}
+
+class VersionTest {
+    private fun cmp(a: String, b: String) = com.gascanner.app.data.update.UpdateChecker.compareVersions(a, b)
+
+    @Test fun releaseTags() {
+        assertTrue(cmp("v.0.5", "0.4.1") > 0)
+        assertTrue(cmp("v.0.4.1", "0.4.1") == 0)
+        assertTrue(cmp("v.0.3.1-alpha", "0.4.0") < 0)
+        assertTrue(cmp("v.0.4.10", "0.4.9") > 0)
+    }
+}

@@ -25,7 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.compose.navigation
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -37,6 +40,7 @@ import com.gascanner.app.i18n.LocalStrings
 import com.gascanner.app.i18n.Strings
 import com.gascanner.app.ui.card.CardDetailScreen
 import com.gascanner.app.ui.collection.CollectionScreen
+import com.gascanner.app.ui.compare.CompareScreen
 import com.gascanner.app.ui.decks.DeckDetailScreen
 import com.gascanner.app.ui.decks.DecksScreen
 import com.gascanner.app.ui.scan.ScanScreen
@@ -57,38 +61,47 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/*
+ * Each bottom tab has its own nested navigation graph, so each keeps its own history
+ * (e.g. an open deck stays in the Decks tab and never shows up when switching to Collection).
+ */
 private object Routes {
+    const val TAB_SEARCH = "tab_search"
+    const val TAB_SCAN = "tab_scan"
+    const val TAB_COLLECTION = "tab_collection"
+    const val TAB_DECKS = "tab_decks"
+    const val TAB_SETTINGS = "tab_settings"
+
     const val SEARCH = "search"
     const val SCAN = "scan"
     const val COLLECTION = "collection"
     const val DECKS = "decks"
     const val SETTINGS = "settings"
-    const val CARD = "card/{slug}?edition={edition}"
-    const val DECK = "deck/{deckId}"
+    const val COMPARE = "collection/compare"
+    const val DECK = "decks/deck/{deckId}"
 
-    fun card(slug: String, editionUuid: String?): String =
-        "card/${Uri.encode(slug)}" + (editionUuid?.let { "?edition=${Uri.encode(it)}" } ?: "")
+    fun cardPattern(tab: String) = "$tab/card/{slug}?edition={edition}"
+    fun card(tab: String, slug: String, editionUuid: String?): String =
+        "$tab/card/${Uri.encode(slug)}" + (editionUuid?.let { "?edition=${Uri.encode(it)}" } ?: "")
 
-    fun deck(id: Long) = "deck/$id"
+    fun deck(id: Long) = "decks/deck/$id"
 }
 
-private data class Tab(val route: String, val label: (Strings) -> String, val icon: ImageVector)
+private data class Tab(val graph: String, val label: (Strings) -> String, val icon: ImageVector)
 
 private val tabs = listOf(
-    Tab(Routes.SEARCH, { it.tabCards }, Icons.Default.Search),
-    Tab(Routes.SCAN, { it.tabScan }, Icons.Default.CameraAlt),
-    Tab(Routes.COLLECTION, { it.tabCollection }, Icons.Default.CollectionsBookmark),
-    Tab(Routes.DECKS, { it.tabDecks }, Icons.Default.Style),
-    Tab(Routes.SETTINGS, { it.tabSettings }, Icons.Default.Settings),
+    Tab(Routes.TAB_SEARCH, { it.tabCards }, Icons.Default.Search),
+    Tab(Routes.TAB_SCAN, { it.tabScan }, Icons.Default.CameraAlt),
+    Tab(Routes.TAB_COLLECTION, { it.tabCollection }, Icons.Default.CollectionsBookmark),
+    Tab(Routes.TAB_DECKS, { it.tabDecks }, Icons.Default.Style),
+    Tab(Routes.TAB_SETTINGS, { it.tabSettings }, Icons.Default.Settings),
 )
 
 @Composable
 private fun AppRoot() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
-    val currentRoute = backStack?.destination?.route
     val s = LocalStrings.current
-    val openCard: (String, String?) -> Unit = { slug, edition -> nav.navigate(Routes.card(slug, edition)) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -96,8 +109,8 @@ private fun AppRoot() {
             NavigationBar {
                 tabs.forEach { tab ->
                     NavigationBarItem(
-                        selected = currentRoute == tab.route,
-                        onClick = { nav.switchTab(tab.route) },
+                        selected = backStack?.destination?.hierarchy?.any { it.route == tab.graph } == true,
+                        onClick = { nav.switchTab(tab.graph) },
                         icon = { Icon(tab.icon, contentDescription = null) },
                         label = { Text(tab.label(s), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     )
@@ -105,57 +118,70 @@ private fun AppRoot() {
             }
         },
     ) { padding ->
-        NavHost(nav, startDestination = Routes.SEARCH, modifier = Modifier.padding(padding)) {
-            composable(Routes.SEARCH) {
-                SearchScreen(onOpenCard = openCard)
+        NavHost(nav, startDestination = Routes.TAB_SEARCH, modifier = Modifier.padding(padding)) {
+            fun openCard(tab: String): (String, String?) -> Unit = { slug, edition -> nav.navigate(Routes.card(tab, slug, edition)) }
+
+            navigation(startDestination = Routes.SEARCH, route = Routes.TAB_SEARCH) {
+                composable(Routes.SEARCH) { SearchScreen(onOpenCard = openCard(Routes.SEARCH)) }
+                cardScreen(nav, Routes.SEARCH)
             }
-            composable(Routes.SCAN) {
-                ScanScreen(onOpenCard = openCard, onOpenSettings = { nav.switchTab(Routes.SETTINGS) })
+            navigation(startDestination = Routes.SCAN, route = Routes.TAB_SCAN) {
+                composable(Routes.SCAN) {
+                    ScanScreen(onOpenCard = openCard(Routes.SCAN), onOpenSettings = { nav.switchTab(Routes.TAB_SETTINGS) })
+                }
+                cardScreen(nav, Routes.SCAN)
             }
-            composable(Routes.COLLECTION) {
-                CollectionScreen(onOpenCard = openCard)
+            navigation(startDestination = Routes.COLLECTION, route = Routes.TAB_COLLECTION) {
+                composable(Routes.COLLECTION) {
+                    CollectionScreen(onOpenCard = openCard(Routes.COLLECTION), onCompare = { nav.navigate(Routes.COMPARE) })
+                }
+                composable(Routes.COMPARE) {
+                    CompareScreen(onBack = { nav.popBackStack() }, onOpenCard = openCard(Routes.COLLECTION))
+                }
+                cardScreen(nav, Routes.COLLECTION)
             }
-            composable(Routes.DECKS) {
-                DecksScreen(onOpenDeck = { nav.navigate(Routes.deck(it)) })
+            navigation(startDestination = Routes.DECKS, route = Routes.TAB_DECKS) {
+                composable(Routes.DECKS) { DecksScreen(onOpenDeck = { nav.navigate(Routes.deck(it)) }) }
+                composable(Routes.DECK, arguments = listOf(navArgument("deckId") { type = NavType.LongType })) { entry ->
+                    DeckDetailScreen(
+                        deckId = entry.arguments?.getLong("deckId") ?: 0L,
+                        onBack = { nav.popBackStack() },
+                        onOpenCard = openCard(Routes.DECKS),
+                        onAddCards = { nav.switchTab(Routes.TAB_SEARCH) },
+                    )
+                }
+                cardScreen(nav, Routes.DECKS)
             }
-            composable(Routes.SETTINGS) {
-                SettingsScreen()
-            }
-            composable(
-                Routes.CARD,
-                arguments = listOf(
-                    navArgument("slug") { type = NavType.StringType },
-                    navArgument("edition") {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = null
-                    },
-                ),
-            ) { entry ->
-                CardDetailScreen(
-                    slug = entry.arguments?.getString("slug").orEmpty(),
-                    editionUuid = entry.arguments?.getString("edition"),
-                    onBack = { nav.popBackStack() },
-                )
-            }
-            composable(
-                Routes.DECK,
-                arguments = listOf(navArgument("deckId") { type = NavType.LongType }),
-            ) { entry ->
-                DeckDetailScreen(
-                    deckId = entry.arguments?.getLong("deckId") ?: 0L,
-                    onBack = { nav.popBackStack() },
-                    onOpenCard = openCard,
-                    onAddCards = { nav.switchTab(Routes.SEARCH) },
-                )
+            navigation(startDestination = Routes.SETTINGS, route = Routes.TAB_SETTINGS) {
+                composable(Routes.SETTINGS) { SettingsScreen() }
             }
         }
     }
 }
 
-private fun NavHostController.switchTab(route: String) {
-    navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+private fun NavGraphBuilder.cardScreen(nav: NavHostController, tab: String) {
+    composable(
+        Routes.cardPattern(tab),
+        arguments = listOf(
+            navArgument("slug") { type = NavType.StringType },
+            navArgument("edition") {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+        ),
+    ) { entry ->
+        CardDetailScreen(
+            slug = entry.arguments?.getString("slug").orEmpty(),
+            editionUuid = entry.arguments?.getString("edition"),
+            onBack = { nav.popBackStack() },
+        )
+    }
+}
+
+private fun NavHostController.switchTab(graph: String) {
+    navigate(graph) {
+        popUpTo(this@switchTab.graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
     }

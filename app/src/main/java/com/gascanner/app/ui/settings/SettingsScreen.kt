@@ -55,6 +55,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gascanner.app.AppContainer
 import com.gascanner.app.appContainer
 import com.gascanner.app.data.cache.SyncState
+import com.gascanner.app.data.images.ImageDownloadState
+import com.gascanner.app.data.update.UpdateChecker
+import com.gascanner.app.data.update.UpdateState
+import androidx.compose.ui.platform.LocalUriHandler
 import com.gascanner.app.data.settings.AppSettings
 import com.gascanner.app.data.settings.PriceSourceConfig
 import com.gascanner.app.data.settings.PriceSourceKind
@@ -139,6 +143,26 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
         messages.tryEmit(if (result.isSuccess) s.tcgUpdated else s.updateFailed(result.exceptionOrNull()?.message.orEmpty()))
     }
 
+    val images: StateFlow<ImageDownloadState> = c.images.state
+    val update: StateFlow<UpdateState> = c.updates.state
+    val currentVersion: String = c.updates.currentVersion
+    private val _imageStats = MutableStateFlow(0 to 0L)
+    val imageStats: StateFlow<Pair<Int, Long>> = _imageStats.asStateFlow()
+
+    init {
+        viewModelScope.launch { images.collect { _imageStats.value = c.images.stats() } }
+    }
+
+    fun checkUpdate() = c.appScope.launch { c.updates.check(force = true) }
+
+    fun setOfflineImages(on: Boolean) {
+        c.appScope.launch {
+            c.settings.setOfflineImages(on)
+            if (on) c.images.downloadAll(c.cards.allImageUrls()) else c.images.deleteAll()
+            _imageStats.value = c.images.stats()
+        }
+    }
+
     fun syncNow(full: Boolean) {
         c.appScope.launch { c.cards.sync(full) }
     }
@@ -154,6 +178,10 @@ fun SettingsScreen() {
     val sync by vm.sync.collectAsStateWithLifecycle()
     val offlineCount by vm.offlineCount.collectAsStateWithLifecycle()
     val detectTick by vm.detectTick.collectAsStateWithLifecycle()
+    val imageState by vm.images.collectAsStateWithLifecycle()
+    val imageStats by vm.imageStats.collectAsStateWithLifecycle()
+    val update by vm.update.collectAsStateWithLifecycle()
+    val uri = LocalUriHandler.current
     val snackbar = remember { SnackbarHostState() }
     var editing by remember { mutableStateOf<PriceSourceConfig?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -198,6 +226,28 @@ fun SettingsScreen() {
                         Button(onClick = { vm.syncNow(full = false) }, enabled = sync !is SyncState.Running) { Text(s.checkUpdates) }
                         OutlinedButton(onClick = { vm.syncNow(full = true) }, enabled = sync !is SyncState.Running) { Text(s.redownload) }
                     }
+                }
+            }
+
+            // Offline images
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(s.offlineImages, style = MaterialTheme.typography.bodyLarge)
+                        SmallNote(s.offlineImagesHelp)
+                    }
+                    Switch(checked = st.offlineImages, onCheckedChange = { vm.setOfflineImages(it) })
+                }
+                when (val im = imageState) {
+                    is ImageDownloadState.Running -> {
+                        SmallNote(s.imagesProgress(im.done, im.total))
+                        LinearProgressIndicator(
+                            progress = { if (im.total > 0) im.done.toFloat() / im.total else 0f },
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        )
+                    }
+                    is ImageDownloadState.Failed -> SmallNote(s.imagesFailed(im.message), color = MaterialTheme.colorScheme.error)
+                    else -> if (imageStats.first > 0) SmallNote(s.imagesStatus(imageStats.first, (imageStats.second / 1_048_576).toInt()))
                 }
             }
 
@@ -288,6 +338,28 @@ fun SettingsScreen() {
             }
             item {
                 OutlinedButton(onClick = { vm.refreshPrices() }, modifier = Modifier.fillMaxWidth()) { Text(s.refreshTcg) }
+            }
+            item { HorizontalDivider() }
+            // App version & updates
+            item { Section(s.appVersion) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("GA Scanner ${vm.currentVersion}")
+                    when (val u = update) {
+                        is UpdateState.Checking -> SmallNote(s.checkingUpdates)
+                        is UpdateState.UpToDate -> SmallNote(s.upToDate)
+                        is UpdateState.Failed -> SmallNote(s.updateCheckFailed(u.message), color = MaterialTheme.colorScheme.error)
+                        is UpdateState.Available -> {
+                            Text(s.updateAvailable(u.info.version), color = MaterialTheme.colorScheme.primary)
+                            Button(onClick = { uri.openUri(u.info.apkUrl ?: u.info.pageUrl) }) { Text(s.downloadUpdate) }
+                        }
+                        UpdateState.Unknown -> Unit
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { vm.checkUpdate() }) { Text(s.checkUpdates) }
+                        TextButton(onClick = { uri.openUri(UpdateChecker.RELEASES_PAGE) }) { Text(s.allReleases) }
+                    }
+                }
             }
             item { HorizontalDivider() }
             item { SmallNote(s.dataNotice) }

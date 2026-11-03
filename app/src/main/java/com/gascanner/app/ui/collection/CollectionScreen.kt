@@ -97,7 +97,7 @@ private data class EntryRow(
 )
 
 @Composable
-fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
+fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, onCompare: () -> Unit) {
     val container = appContainer()
     val s = LocalStrings.current
     val vm: CollectionViewModel = viewModel { CollectionViewModel(container) }
@@ -183,6 +183,7 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
             }
             IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, s.more) }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(text = { Text(s.compareTitle) }, onClick = { menuOpen = false; onCompare() })
                 DropdownMenuItem(text = { Text(s.updatePrices) }, onClick = { menuOpen = false; vm.updatePrices() })
                 DropdownMenuItem(text = { Text(s.exportCsv) }, onClick = { menuOpen = false; exportLauncher.launch(vm.exportFileName()) })
                 DropdownMenuItem(
@@ -201,6 +202,9 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
             busy?.let {
                 SmallNote(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+            }
+            if (tab != ListTab.OWNED) {
+                TextButton(onClick = onCompare, modifier = Modifier.padding(horizontal = 8.dp)) { Text(s.compareTitle) }
             }
             if (rows.isEmpty()) {
                 CenteredMessage(
