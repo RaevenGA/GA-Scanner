@@ -160,6 +160,8 @@ data class AppSettings(
     val scanTarget: AddTarget = AddTarget.COLLECTION,
     /** Deck that scans go to when the target is DECK (0 = none chosen yet). */
     val scanDeckId: Long = 0L,
+    /** Keep a copy of every card image on the phone. */
+    val offlineImages: Boolean = false,
     val lastSyncAt: Long = 0L,
 ) {
     val defaultSource: PriceSourceConfig?
@@ -195,6 +197,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
             scanTarget = p[KEY_SCAN_TARGET]?.let { runCatching { AddTarget.valueOf(it) }.getOrNull() } ?: AddTarget.COLLECTION,
             lastSyncAt = p[KEY_LAST_SYNC] ?: 0L,
             scanDeckId = p[KEY_SCAN_DECK] ?: 0L,
+            offlineImages = p[KEY_OFFLINE_IMAGES] ?: false,
         )
     }
 
@@ -209,6 +212,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
     suspend fun setViewMode(mode: ViewMode) = store.edit { it[KEY_VIEW_MODE] = mode.name }
     suspend fun setLiveAutoAdd(on: Boolean) = store.edit { it[KEY_LIVE_AUTO_ADD] = on }
     suspend fun setScanTarget(target: AddTarget) = store.edit { it[KEY_SCAN_TARGET] = target.name }
+    suspend fun setOfflineImages(on: Boolean) = store.edit { it[KEY_OFFLINE_IMAGES] = on }
     suspend fun setScanDeck(id: Long) = store.edit { it[KEY_SCAN_DECK] = id }
     suspend fun setLastSync(ms: Long) = store.edit { it[KEY_LAST_SYNC] = ms }
 
@@ -235,5 +239,6 @@ class SettingsRepository(private val context: Context, private val json: Json) {
         val KEY_SCAN_TARGET = stringPreferencesKey("scan_target")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_at")
         val KEY_SCAN_DECK = longPreferencesKey("scan_deck_id")
+        val KEY_OFFLINE_IMAGES = booleanPreferencesKey("offline_images")
     }
 }

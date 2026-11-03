@@ -249,6 +249,7 @@ fun SearchScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit) {
         actions = { ViewModeButton(viewMode, vm::setViewMode) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
+            UpdateBanner()
             SyncBanner(sync)
             OutlinedTextField(
                 value = filters.query,
@@ -427,5 +428,25 @@ private fun CardRow(row: ResultRow, owned: Int, onClick: () -> Unit, onAddToBuy:
             )
         }
         IconButton(onClick = onAddToBuy) { Icon(Icons.Default.ShoppingCart, s.quickAddBuy) }
+    }
+}
+
+
+/** Shown on the Cards tab when GitHub has a newer release; can be dismissed for this session. */
+@Composable
+private fun UpdateBanner() {
+    val s = LocalStrings.current
+    val updates = appContainer().updates
+    val state by updates.state.collectAsStateWithLifecycle()
+    var dismissed by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    val available = state as? com.gascanner.app.data.update.UpdateState.Available ?: return
+    if (dismissed) return
+    androidx.compose.material3.Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(s.updateAvailable(available.info.version), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = { uri.openUri(available.info.apkUrl ?: available.info.pageUrl) }) { Text(s.downloadUpdate) }
+            IconButton(onClick = { dismissed = true }) { Icon(Icons.Default.Clear, s.close) }
+        }
     }
 }

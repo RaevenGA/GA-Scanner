@@ -323,6 +323,8 @@ class CardRepository(
         return listOf(CardHit(card, edition))
     }
 
+    suspend fun allImageUrls(): List<String> = dao.imageUrls()
+
     suspend fun allNames(): List<CardName> {
         namesCache?.let { return it }
         val names = dao.allNames()

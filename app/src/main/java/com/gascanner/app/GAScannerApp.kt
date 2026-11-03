@@ -34,20 +34,34 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
-class GAScannerApp : Application() {
+class GAScannerApp : Application(), coil.ImageLoaderFactory {
     lateinit var container: AppContainer
         private set
 
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        // Check the card database for updates on every start (downloads it all the first time).
-        container.cards.syncOnStartup(container.appScope)
+        val c = container
+        c.appScope.launch {
+            // Check the card database for updates on every start (downloads it all the first time),
+            // then fetch images of any new cards if offline images are on.
+            c.cards.sync(full = false)
+            if (c.settings.current().offlineImages) c.images.downloadAll(c.cards.allImageUrls())
+        }
+        c.appScope.launch { c.updates.check() }
     }
+
+    /** Card images come from the saved offline copies whenever they exist. */
+    override fun newImageLoader(): coil.ImageLoader =
+        coil.ImageLoader.Builder(this)
+            .components { add(com.gascanner.app.data.images.OfflineImageInterceptor(container.images)) }
+            .crossfade(true)
+            .build()
 }
 
 const val USER_AGENT = "GAScanner/${BuildConfig.VERSION_NAME} (Android; +https://github.com/RaevenGA/GA-Scanner)"
@@ -105,6 +119,8 @@ class AppContainer(context: Context) {
     val decks = DeckRepository(db.deckDao())
     val trade = TradeRepository(listsDb.trade())
     val importExport = ImportExport(cards, collection, trade)
+    val images = com.gascanner.app.data.images.ImageStore(context, http)
+    val updates = com.gascanner.app.data.update.UpdateChecker(http, json)
 
     /** Current UI language, for text produced outside composables (e.g. snackbar messages). */
     val strings: StateFlow<Strings> = settings.settings

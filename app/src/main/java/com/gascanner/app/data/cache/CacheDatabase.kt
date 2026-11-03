@@ -117,6 +117,9 @@ interface CardCacheDao {
     @Query("SELECT elements, types FROM cards")
     suspend fun facets(): List<CardFacets>
 
+    @Query("SELECT DISTINCT imageUrl FROM editions WHERE imageUrl IS NOT NULL")
+    suspend fun imageUrls(): List<String>
+
     @Query("SELECT json FROM cards")
     suspend fun allJson(): List<String>
 

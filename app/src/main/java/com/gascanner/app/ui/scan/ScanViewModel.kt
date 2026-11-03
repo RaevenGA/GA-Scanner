@@ -233,6 +233,8 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
     private var lastThumb: IntArray? = null
     /** Something moved in the frame since the last add: a card was swapped (maybe for an identical one). */
     private var motionSinceAdd = false
+    private var lastMotionDiff = 0L
+    private var lastAddAt = 0L
 
     /** Called from the camera thread; true when the next frame should be processed. */
     fun wantsFrame(): Boolean =
@@ -320,6 +322,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
             addToTarget(hit, foilIn = false, quiet = true)
             lastAddedKey = key
             motionSinceAdd = false
+            lastAddAt = SystemClock.elapsedRealtime()
             _live.update { it.copy(justAdded = true, canUndo = true) }
         }
     }
@@ -335,7 +338,13 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
         if (prev != null) {
             var diff = 0L
             for (i in grey.indices) diff += kotlin.math.abs(grey[i] - prev[i])
-            if (diff / grey.size > MOTION_THRESHOLD) {
+            val mean = diff / grey.size
+            // Less sensitive: a big change in one frame, or a clear change over two frames in a row,
+            // and never right after an add (refocusing / the hand settling would look like a swap).
+            val strong = mean > MOTION_STRONG || (mean > MOTION_THRESHOLD && lastMotionDiff > MOTION_THRESHOLD)
+            lastMotionDiff = mean
+            val settling = SystemClock.elapsedRealtime() - lastAddAt < ADD_COOLDOWN_MS
+            if (strong && !settling) {
                 motionSinceAdd = true
                 // Let the same card lock (and be added) again after a swap.
                 lockedKey = null
@@ -348,7 +357,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
     private fun onEmptyFrame(seeingText: Boolean) {
         emptyFrames++
         // Card taken out of view: the same card may be added again next time.
-        if (emptyFrames >= 2) {
+        if (emptyFrames >= 3) {
             pendingKey = null
             pendingCount = 0
             lockedKey = null
@@ -374,6 +383,8 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
     private companion object {
         const val LIVE_INTERVAL_MS = 350L
         /** Mean grey-level change (0–255) that counts as the card being moved or swapped. */
-        const val MOTION_THRESHOLD = 28
+        const val MOTION_THRESHOLD = 32
+        const val MOTION_STRONG = 50
+        const val ADD_COOLDOWN_MS = 1500L
     }
 }
