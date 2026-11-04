@@ -78,9 +78,11 @@ class CollectionRepository(private val dao: CollectionDao) {
     }
 
     /** Remove one copy (used to undo a scan). */
-    suspend fun removeOne(editionUuid: String, foil: Boolean) {
-        dao.find(editionUuid, foil)?.let { changeQuantity(it, -1) }
+    suspend fun removeOne(editionUuid: String, foil: Boolean, count: Int = 1) {
+        dao.find(editionUuid, foil)?.let { changeQuantity(it, -count) }
     }
+
+    suspend fun quantityOf(editionUuid: String, foil: Boolean): Int = dao.find(editionUuid, foil)?.quantity ?: 0
 }
 
 class DeckRepository(private val dao: DeckDao) {
@@ -131,8 +133,8 @@ class DeckRepository(private val dao: DeckDao) {
     }
 
     /** Remove one copy (used to undo a scan). */
-    suspend fun removeOne(deckId: Long, section: DeckSection, editionUuid: String, foil: Boolean = false) {
-        dao.findCard(deckId, section.name, editionUuid, foil)?.let { changeQuantity(it, -1) }
+    suspend fun removeOne(deckId: Long, section: DeckSection, editionUuid: String, foil: Boolean = false, count: Int = 1) {
+        dao.findCard(deckId, section.name, editionUuid, foil)?.let { changeQuantity(it, -count) }
     }
 
     /** Same as [CollectionRepository.fixFinishes], for deck cards. */

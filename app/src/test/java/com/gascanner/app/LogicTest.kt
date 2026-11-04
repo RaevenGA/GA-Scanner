@@ -404,3 +404,25 @@ class SongDeckTest {
         assertTrue(inMain.any { it is DeckIssue.SongInWrongSection })
     }
 }
+
+class SideboardPointsTest {
+    private fun card(slug: String, types: List<String>) = CardDto(uuid = slug, slug = slug, name = slug, types = types)
+    private fun dc(slug: String, qty: Int = 1) =
+        DeckCard(deckId = 1, section = DeckSection.SIDEBOARD.name, cardSlug = slug, cardName = slug, editionUuid = slug, setPrefix = "X", imageUrl = null, quantity = qty)
+    private val info = (1..6).associate { "ch$it" to card("ch$it", listOf("CHAMPION")) } +
+        (1..16).associate { "m$it" to card("m$it", listOf("ACTION")) }
+
+    private fun tooBig(side: List<DeckCard>): Boolean {
+        val check = DeckValidator.check(GameFormat.STANDARD, side, info)
+        return check.issues.any { it is DeckIssue.SideboardTooBig }
+    }
+
+    @Test fun fifteenPoints() {
+        assertFalse(tooBig((1..5).map { dc("ch$it") }))                       // 5 × 3
+        assertFalse(tooBig((1..15).map { dc("m$it") }))                       // 15 × 1
+        assertFalse(tooBig((1..3).map { dc("ch$it") } + (1..6).map { dc("m$it") }))  // 9 + 6
+        assertTrue(tooBig((1..6).map { dc("ch$it") }))                        // 18
+        assertTrue(tooBig((1..4).map { dc("ch$it") } + (1..4).map { dc("m$it") }))   // 16
+        assertEquals(15, DeckValidator.check(GameFormat.STANDARD, (1..5).map { dc("ch$it") }, info).sideboardPoints)
+    }
+}

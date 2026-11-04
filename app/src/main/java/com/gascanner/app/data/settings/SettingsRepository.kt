@@ -157,6 +157,8 @@ data class AppSettings(
     val defaultSourceId: String = PriceSourceConfig.TCGPLAYER_MARKET_ID,
     val viewMode: ViewMode = ViewMode.LIST,
     val liveAutoAdd: Boolean = false,
+    /** Auto-add uses the "copies" number too (otherwise always one copy per card). */
+    val autoAddCopies: Boolean = false,
     val scanTarget: AddTarget = AddTarget.COLLECTION,
     /** Deck that scans go to when the target is DECK (0 = none chosen yet). */
     val scanDeckId: Long = 0L,
@@ -194,6 +196,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
             defaultSourceId = p[KEY_DEFAULT_SOURCE] ?: PriceSourceConfig.TCGPLAYER_MARKET_ID,
             viewMode = p[KEY_VIEW_MODE]?.let { runCatching { ViewMode.valueOf(it) }.getOrNull() } ?: ViewMode.LIST,
             liveAutoAdd = p[KEY_LIVE_AUTO_ADD] ?: false,
+            autoAddCopies = p[KEY_AUTO_ADD_COPIES] ?: false,
             scanTarget = p[KEY_SCAN_TARGET]?.let { runCatching { AddTarget.valueOf(it) }.getOrNull() } ?: AddTarget.COLLECTION,
             lastSyncAt = p[KEY_LAST_SYNC] ?: 0L,
             scanDeckId = p[KEY_SCAN_DECK] ?: 0L,
@@ -211,6 +214,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
     suspend fun setDefaultSource(id: String) = store.edit { it[KEY_DEFAULT_SOURCE] = id }
     suspend fun setViewMode(mode: ViewMode) = store.edit { it[KEY_VIEW_MODE] = mode.name }
     suspend fun setLiveAutoAdd(on: Boolean) = store.edit { it[KEY_LIVE_AUTO_ADD] = on }
+    suspend fun setAutoAddCopies(on: Boolean) = store.edit { it[KEY_AUTO_ADD_COPIES] = on }
     suspend fun setScanTarget(target: AddTarget) = store.edit { it[KEY_SCAN_TARGET] = target.name }
     suspend fun setOfflineImages(on: Boolean) = store.edit { it[KEY_OFFLINE_IMAGES] = on }
     /** The newest version the user already said "Later" to, so the pop-up shows once per release. */
@@ -242,6 +246,7 @@ class SettingsRepository(private val context: Context, private val json: Json) {
         val KEY_DEFAULT_SOURCE = stringPreferencesKey("default_source")
         val KEY_VIEW_MODE = stringPreferencesKey("view_mode")
         val KEY_LIVE_AUTO_ADD = booleanPreferencesKey("live_auto_add")
+        val KEY_AUTO_ADD_COPIES = booleanPreferencesKey("auto_add_copies")
         val KEY_SCAN_TARGET = stringPreferencesKey("scan_target")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_at")
         val KEY_SCAN_DECK = longPreferencesKey("scan_deck_id")

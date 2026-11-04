@@ -84,6 +84,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.CancellationException
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material.icons.filled.LibraryAdd
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -225,6 +227,42 @@ class DeckDetailViewModel(private val deckId: Long, private val c: AppContainer)
         }
     }
 
+    private val _messages = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: kotlinx.coroutines.flow.SharedFlow<String> = _messages
+
+    /** Copies to add: everything in the deck, and only what the collection doesn't have yet. */
+    suspend fun collectionPlan(): Pair<Int, Int> {
+        var all = 0
+        var missing = 0
+        cards.value.groupBy { it.editionUuid to it.foil }.forEach { (key, list) ->
+            val n = list.sumOf { it.quantity }
+            all += n
+            missing += (n - c.collection.quantityOf(key.first, key.second)).coerceAtLeast(0)
+        }
+        return all to missing
+    }
+
+    /** Puts the deck's cards into the collection (all copies, or only the missing ones). */
+    fun addToCollection(onlyMissing: Boolean) = viewModelScope.launch {
+        var added = 0
+        val map = info.value
+        cards.value.groupBy { it.editionUuid to it.foil }.forEach { (key, list) ->
+            val (uuid, foil) = key
+            val n = list.sumOf { it.quantity }
+            val qty = if (onlyMissing) (n - c.collection.quantityOf(uuid, foil)).coerceAtLeast(0) else n
+            if (qty == 0) return@forEach
+            val card = map[list.first().cardSlug]
+            val edition = card?.allEditions?.firstOrNull { it.uuid == uuid }
+            val hit = if (card != null && edition != null) card to edition
+            else runCatching { c.cards.byEditionUuid(uuid) }.getOrNull()?.let { it.card to it.edition }
+            if (hit?.second != null) {
+                c.collection.add(hit.first, hit.second!!, foil, qty)
+                added += qty
+            }
+        }
+        _messages.tryEmit(s.deckAddedToCollection(added))
+    }
+
     /** Fetch the default shop's price for every card in the deck again. */
     fun updatePrices() {
         if (_busy.value != null) return
@@ -307,10 +345,14 @@ fun DeckDetailScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<DeckCard?>(null) }
+    var toCollection by remember { mutableStateOf(false) }
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
 
     ScreenScaffold(
         title = deck?.name ?: s.decksTitle,
         onBack = onBack,
+        snackbarHostState = snackbar,
         actions = {
             ViewModeButton(viewMode, vm::setViewMode)
             IconButton(onClick = {
@@ -324,6 +366,8 @@ fun DeckDetailScreen(
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text(s.updatePrices) }, leadingIcon = { Icon(Icons.Default.Refresh, null) },
                     onClick = { menu = false; vm.updatePrices() })
+                DropdownMenuItem(text = { Text(s.deckToCollection) }, leadingIcon = { Icon(Icons.Default.LibraryAdd, null) },
+                    onClick = { menu = false; toCollection = true })
                 DropdownMenuItem(text = { Text(s.renameDeck) }, leadingIcon = { Icon(Icons.Default.Edit, null) },
                     onClick = { menu = false; renaming = true })
                 DropdownMenuItem(text = { Text(s.deleteDeck) }, leadingIcon = { Icon(Icons.Default.Delete, null) },
@@ -359,7 +403,7 @@ fun DeckDetailScreen(
             LazyColumn(Modifier.padding(padding).fillMaxSize()) {
                 item(key = "header") { header() }
                 sections.forEach { (section, inSection) ->
-                    item(key = "h-${section.name}") { SectionTitle(sectionLabel(s, section), inSection.sumOf { it.quantity }) }
+                    item(key = "h-${section.name}") { SectionTitle(sectionLabel(s, section), inSection.sumOf { it.quantity }, sideExtra(s, section, format, check)) }
                     items(inSection, key = { it.id }) { card ->
                         Row(
                             Modifier.fillMaxWidth().clickable { onOpenCard(card.cardSlug, card.editionUuid) }
@@ -396,7 +440,7 @@ fun DeckDetailScreen(
                 item(key = "header", span = { GridItemSpan(maxLineSpan) }) { header() }
                 sections.forEach { (section, inSection) ->
                     item(key = "h-${section.name}", span = { GridItemSpan(maxLineSpan) }) {
-                        SectionTitle(sectionLabel(s, section), inSection.sumOf { it.quantity })
+                        SectionTitle(sectionLabel(s, section), inSection.sumOf { it.quantity }, sideExtra(s, section, format, check))
                     }
                     items(inSection, key = { it.id }) { card ->
                         CardTile(
@@ -427,6 +471,25 @@ fun DeckDetailScreen(
             onSave = { e -> vm.edit(entry, e); editing = null },
         )
     }
+    if (toCollection) {
+        val plan by androidx.compose.runtime.produceState<Pair<Int, Int>?>(null) { this.value = vm.collectionPlan() }
+        AlertDialog(
+            onDismissRequest = { toCollection = false },
+            title = { Text(s.deckToCollection) },
+            text = { Text(s.deckToCollectionHelp) },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(enabled = (plan?.second ?: 0) > 0, onClick = { toCollection = false; vm.addToCollection(onlyMissing = true) }) {
+                        Text(s.onlyMissingCopies(plan?.second ?: 0))
+                    }
+                    TextButton(enabled = plan != null, onClick = { toCollection = false; vm.addToCollection(onlyMissing = false) }) {
+                        Text(s.allDeckCopies(plan?.first ?: 0))
+                    }
+                    TextButton(onClick = { toCollection = false }) { Text(s.cancel) }
+                }
+            },
+        )
+    }
     if (renaming) {
         NameDialog(
             title = s.renameDeck,
@@ -455,9 +518,9 @@ fun DeckDetailScreen(
 }
 
 @Composable
-private fun SectionTitle(label: String, count: Int) {
+private fun SectionTitle(label: String, count: Int, extra: String? = null) {
     Text(
-        "$label · $count",
+        "$label · $count" + (extra?.let { " · $it" } ?: ""),
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
@@ -501,3 +564,7 @@ private fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, on
 
 /** Deck value: total, price per deck entry (by id), and how many copies have a price. */
 data class DeckValue(val total: Money?, val prices: Map<Long, Money>, val pricedCopies: Int, val totalCopies: Int)
+
+/** "13/15 points" next to the sideboard in Standard. */
+private fun sideExtra(s: com.gascanner.app.i18n.Strings, section: DeckSection, format: GameFormat, check: DeckCheck?): String? =
+    if (section == DeckSection.SIDEBOARD && format == GameFormat.STANDARD && check != null) s.sideboardPoints(check.sideboardPoints, 15) else null

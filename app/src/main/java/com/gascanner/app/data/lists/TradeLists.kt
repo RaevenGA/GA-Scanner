@@ -157,8 +157,8 @@ class TradeRepository(private val dao: TradeDao) {
         return changed
     }
 
-    suspend fun removeOne(type: TradeListType, editionUuid: String, foil: Boolean) {
-        dao.find(type.name, editionUuid, foil)?.let { changeQuantity(it, -1) }
+    suspend fun removeOne(type: TradeListType, editionUuid: String, foil: Boolean, count: Int = 1) {
+        dao.find(type.name, editionUuid, foil)?.let { changeQuantity(it, -count) }
     }
     suspend fun clear(type: TradeListType) = dao.clear(type.name)
 }

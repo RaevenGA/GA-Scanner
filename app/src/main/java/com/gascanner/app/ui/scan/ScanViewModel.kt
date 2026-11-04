@@ -135,7 +135,9 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
         val st = _state.value as? ScanUiState.Multi ?: return
         val picked = st.selected.sorted().mapNotNull { st.candidates.getOrNull(it) }
         viewModelScope.launch {
-            picked.forEach { addToTarget(it, foilIn = false, quiet = true) }
+            val n = _copies.value
+            picked.forEach { addToTarget(it, foilIn = false, quiet = true, qtyOverride = n) }
+            _copies.value = 1
             _messages.tryEmit(s.added("${picked.size}"))
             reset()
         }
@@ -149,7 +151,16 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
     fun setScanFoil(on: Boolean) { _scanFoil.value = on }
 
     /** What the last add did, so it can be undone or corrected. */
-    private data class AddRecord(val candidate: Candidate, val target: AddTarget, val foil: Boolean, val deckId: Long, val section: DeckSection?)
+    private data class AddRecord(
+        val candidate: Candidate, val target: AddTarget, val foil: Boolean, val deckId: Long, val section: DeckSection?, val quantity: Int = 1,
+    )
+
+    /** How many copies each add puts in (the "×N" stepper). */
+    private val _copies = MutableStateFlow(1)
+    val copies: StateFlow<Int> = _copies.asStateFlow()
+    fun setCopies(n: Int) { _copies.value = n.coerceIn(1, MAX_COPIES) }
+    val autoAddCopies: StateFlow<Boolean> = c.settings.settings.map { it.autoAddCopies }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     private var lastAdd: AddRecord? = null
 
     fun undoLast() {
@@ -165,32 +176,41 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
     private suspend fun undo(r: AddRecord) {
         val uuid = r.candidate.edition?.uuid ?: r.candidate.card.editions.firstOrNull()?.uuid ?: return
         when (r.target) {
-            AddTarget.COLLECTION -> c.collection.removeOne(uuid, r.foil)
-            AddTarget.SELL -> c.trade.removeOne(TradeListType.SELL, uuid, r.foil)
-            AddTarget.BUY -> c.trade.removeOne(TradeListType.BUY, uuid, r.foil)
-            AddTarget.DECK -> r.section?.let { c.decks.removeOne(r.deckId, it, uuid, r.foil) }
+            AddTarget.COLLECTION -> c.collection.removeOne(uuid, r.foil, r.quantity)
+            AddTarget.SELL -> c.trade.removeOne(TradeListType.SELL, uuid, r.foil, r.quantity)
+            AddTarget.BUY -> c.trade.removeOne(TradeListType.BUY, uuid, r.foil, r.quantity)
+            AddTarget.DECK -> r.section?.let { c.decks.removeOne(r.deckId, it, uuid, r.foil, r.quantity) }
         }
     }
 
-    private suspend fun addToTarget(candidate: Candidate, foilIn: Boolean, quiet: Boolean = false) {
+    /**
+     * @param auto true for Auto-add: uses the copies number only if that's switched on in Settings.
+     * @param qtyOverride exact number of copies (used when replacing an earlier add).
+     */
+    private suspend fun addToTarget(
+        candidate: Candidate, foilIn: Boolean, quiet: Boolean = false, auto: Boolean = false, qtyOverride: Int? = null,
+    ) {
         val edition = candidate.edition ?: candidate.card.editions.firstOrNull() ?: return
         val foil = edition.fixFoil(foilIn || _scanFoil.value)
-        lastAdd = AddRecord(candidate, target.value, foil, 0L, null)
+        val qty = qtyOverride ?: if (auto && !autoAddCopies.value) 1 else _copies.value
+        // A manual add goes back to one copy; with Auto-add the number stays until changed.
+        if (qtyOverride == null && !auto) _copies.value = 1
+        lastAdd = AddRecord(candidate, target.value, foil, 0L, null, qty)
         when (target.value) {
-            AddTarget.COLLECTION -> c.collection.add(candidate.card, edition, foil, 1)
-            AddTarget.SELL -> c.trade.add(TradeListType.SELL, candidate.card, edition, foil, 1)
-            AddTarget.BUY -> c.trade.add(TradeListType.BUY, candidate.card, edition, foil, 1)
+            AddTarget.COLLECTION -> c.collection.add(candidate.card, edition, foil, qty)
+            AddTarget.SELL -> c.trade.add(TradeListType.SELL, candidate.card, edition, foil, qty)
+            AddTarget.BUY -> c.trade.add(TradeListType.BUY, candidate.card, edition, foil, qty)
             AddTarget.DECK -> {
                 val deckId = ensureScanDeck()
                 // Champions and regalia go to the material deck, Boons and Songs to their own section.
                 val section = com.gascanner.app.ui.card.defaultSection(candidate.card)
-                c.decks.addCard(deckId, section, candidate.card, edition, 1, foil)
-                lastAdd = AddRecord(candidate, AddTarget.DECK, foil, deckId, section)
-                if (!quiet) _messages.tryEmit(s.addedToDeck(1, candidate.card.name, sectionLabel(s, section).lowercase()))
+                c.decks.addCard(deckId, section, candidate.card, edition, qty, foil)
+                lastAdd = AddRecord(candidate, AddTarget.DECK, foil, deckId, section, qty)
+                if (!quiet) _messages.tryEmit(s.addedToDeck(qty, candidate.card.name, sectionLabel(s, section).lowercase()))
                 return
             }
         }
-        if (!quiet) _messages.tryEmit(s.added("${candidate.card.name} (${edition.label}${if (foil) ", foil" else ""})"))
+        if (!quiet) _messages.tryEmit(s.added("${if (qty > 1) "$qty× " else ""}${candidate.card.name} (${edition.label}${if (foil) ", foil" else ""})"))
     }
 
     // ---------- Scanning into a deck ----------
@@ -304,7 +324,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
             previous.candidate.card.uuid == found.card.uuid && key != lastAddedKey
         ) {
             undo(previous)
-            addToTarget(found, foilIn = false, quiet = true)
+            addToTarget(found, foilIn = false, quiet = true, auto = true, qtyOverride = previous.quantity)
             lastAddedKey = key
             _live.update { it.copy(hit = found, justAdded = true, canUndo = true) }
             _messages.tryEmit(s.corrected(found.card.name, found.edition?.label.orEmpty()))
@@ -315,7 +335,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
         // Wait for the footer (exact printing) a little longer before adding a name-only read.
         val confident = found.exact || pendingCount >= 4
         if (newCard && confident) {
-            addToTarget(hit, foilIn = false, quiet = true)
+            addToTarget(hit, foilIn = false, quiet = true, auto = true)
             lastAddedKey = key
             motionSinceAdd = false
             lastAddAt = SystemClock.elapsedRealtime()
@@ -378,6 +398,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
 
     private companion object {
         const val LIVE_INTERVAL_MS = 350L
+        const val MAX_COPIES = 20
         /** Mean grey-level change (0–255) that counts as the card being moved or swapped. */
         const val MOTION_THRESHOLD = 32
         const val MOTION_STRONG = 50
