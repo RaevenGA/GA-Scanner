@@ -50,11 +50,11 @@ class GAScannerApp : Application(), coil.ImageLoaderFactory {
         c.appScope.launch {
             // Check the card database for updates on every start (downloads it all the first time),
             // then fetch images of any new cards if offline images are on.
-            // 0.5.1 matches collector rarities (CSR, CUR…) separately: forget prices saved before.
+            // Price matching changed (0.5.1 collector rarities, 0.5.2 sealed products): forget older prices.
             runCatching {
-                if (c.settings.priceCacheVersion() < 1) {
+                if (c.settings.priceCacheVersion() < 2) {
                     c.cacheDb.prices().clear()
-                    c.settings.setPriceCacheVersion(1)
+                    c.settings.setPriceCacheVersion(2)
                 }
             }
             runCatching { c.cards.sync(full = false) }

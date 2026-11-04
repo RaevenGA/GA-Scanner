@@ -87,6 +87,7 @@ class TcgCsvProvider(
         val candidates = index.entries
             .filter { (k, _) -> k == key || k.startsWith("$key ") }
             .flatMap { it.value }
+            .filterNot { StorePriceProvider.isSealedProduct(it.name, cardName) }
         return candidates
             .map { it to score(it, setPrefix, setName, collectorNumber, rarity) }
             .sortedWith(compareByDescending<Pair<Row, Int>> { it.second }.thenByDescending { it.first.market ?: 0.0 })
