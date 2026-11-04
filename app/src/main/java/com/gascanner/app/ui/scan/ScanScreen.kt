@@ -550,7 +550,11 @@ private fun CameraPreview(
         camera?.let { cam -> if (cam.cameraInfo.hasFlashUnit()) cam.cameraControl.enableTorch(torch) }
     }
     val previewView = remember {
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            // TextureView: a SurfaceView can stay on top of the mode buttons after switching tabs.
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
     }
     DisposableEffect(lifecycleOwner) {
         val future = ProcessCameraProvider.getInstance(context)

@@ -151,15 +151,13 @@ fun CardDetailScreen(slug: String, editionUuid: String?, onBack: () -> Unit) {
             decks = decks,
             // Champions and regalia go to the material deck, Boons to their own section.
             initialSection = state.card?.let {
-                when {
-                    it.isBoon -> DeckSection.BOONS
-                    it.isMaterial -> DeckSection.MATERIAL
-                    else -> DeckSection.MAIN
-                }
+                defaultSection(it)
             } ?: DeckSection.MAIN,
+            edition = edition,
+            initialFoil = state.foilPrices,
             onDismiss = { dialog = null },
-            onConfirm = { deckId, newName, section, qty ->
-                vm.addToDeck(deckId, newName, section, qty, sectionLabel(s, section).lowercase())
+            onConfirm = { deckId, newName, section, qty, foil ->
+                vm.addToDeck(deckId, newName, section, qty, foil, sectionLabel(s, section).lowercase())
                 dialog = null
             },
         )
@@ -170,6 +168,7 @@ fun CardDetailScreen(slug: String, editionUuid: String?, onBack: () -> Unit) {
 fun sectionLabel(s: Strings, section: DeckSection) = when (section) {
     DeckSection.MATERIAL -> s.sectionMaterial
     DeckSection.MAIN -> s.sectionMain
+    DeckSection.SONGS -> s.sectionSongs
     DeckSection.SIDEBOARD -> s.sectionSideboard
     DeckSection.BOONS -> s.sectionBoons
 }
@@ -427,9 +426,12 @@ fun AddCopiesDialog(
 fun AddToDeckDialog(
     decks: List<DeckWithCount>,
     initialSection: DeckSection = DeckSection.MAIN,
+    edition: EditionDto? = null,
+    initialFoil: Boolean = false,
     onDismiss: () -> Unit,
-    onConfirm: (deckId: Long?, newDeckName: String?, section: DeckSection, quantity: Int) -> Unit,
+    onConfirm: (deckId: Long?, newDeckName: String?, section: DeckSection, quantity: Int, foil: Boolean) -> Unit,
 ) {
+    var foil by remember { mutableStateOf(edition?.fixFoil(initialFoil) ?: initialFoil) }
     val s = LocalStrings.current
     var selectedDeck by remember { mutableStateOf(decks.firstOrNull()?.deck?.id) }
     var newName by remember { mutableStateOf("") }
@@ -470,6 +472,7 @@ fun AddToDeckDialog(
                                     when (sec) {
                                         DeckSection.MATERIAL -> s.sectionMaterialShort
                                         DeckSection.MAIN -> s.sectionMainShort
+                                        DeckSection.SONGS -> s.sectionSongsShort
                                         DeckSection.SIDEBOARD -> s.sectionSideboardShort
                                         DeckSection.BOONS -> s.sectionBoonsShort
                                     }
@@ -482,9 +485,13 @@ fun AddToDeckDialog(
                     Text(s.quantity, Modifier.weight(1f))
                     QuantityStepper(qty, onChange = { qty = (qty + it).coerceAtLeast(1) })
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(finishLabel(s, edition), Modifier.weight(1f))
+                    Switch(checked = foil, enabled = edition?.hasBothFinishes ?: true, onCheckedChange = { foil = it })
+                }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(selectedDeck, newName, section, qty) }) { Text(s.add) } },
+        confirmButton = { TextButton(onClick = { onConfirm(selectedDeck, newName, section, qty, foil) }) { Text(s.add) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
     )
 }
@@ -494,4 +501,12 @@ fun finishLabel(s: com.gascanner.app.i18n.Strings, edition: EditionDto?): String
     edition?.foilOnly == true -> s.foilOnly
     edition?.nonFoilOnly == true -> s.nonFoilOnly
     else -> s.foil
+}
+
+/** Where a card goes in a deck: champions and regalia to the material deck, Boons and Songs to their own. */
+fun defaultSection(card: com.gascanner.app.data.api.CardDto): DeckSection = when {
+    card.isBoon -> DeckSection.BOONS
+    card.isSong -> DeckSection.SONGS
+    card.isMaterial -> DeckSection.MATERIAL
+    else -> DeckSection.MAIN
 }

@@ -21,6 +21,10 @@ sealed interface DeckIssue {
     data class BoonsNeeded(val lesser: Int, val greater: Int) : DeckIssue
     data class BoonsOnlyInPantheon(val count: Int) : DeckIssue
     data class BoonInWrongSection(val cardName: String) : DeckIssue
+    /** Songs only work with a champion that opens a Song deck (Casella, level 1+). */
+    data class SongDeckNeedsChampion(val count: Int) : DeckIssue
+    data class SongDeckTooBig(val count: Int, val max: Int) : DeckIssue
+    data class SongInWrongSection(val cardName: String) : DeckIssue
 }
 
 data class DeckCheck(
@@ -93,6 +97,17 @@ object DeckValidator {
         (main + material + side).forEach { c -> if (info[c.cardSlug]?.isBoon == true) issues += DeckIssue.BoonInWrongSection(c.cardName) }
         boons.forEach { c -> if (info[c.cardSlug]?.let { !it.isBoon } == true) issues += DeckIssue.BoonInWrongSection(c.cardName) }
 
+        // Song deck: up to 4 Songs, only with a champion that allows it, and Songs go nowhere else.
+        val songs = cards.filter { it.section == DeckSection.SONGS.name }
+        val songCount = songs.sumOf { it.quantity }
+        if (format != GameFormat.DRAFT && songCount > 0) {
+            val known = material.all { it.cardSlug in info }
+            if (known && material.none { info[it.cardSlug]?.allowsSongDeck == true }) issues += DeckIssue.SongDeckNeedsChampion(songCount)
+            if (songCount > MAX_SONGS) issues += DeckIssue.SongDeckTooBig(songCount, MAX_SONGS)
+        }
+        (main + material + side + boons).forEach { c -> if (info[c.cardSlug]?.isSong == true) issues += DeckIssue.SongInWrongSection(c.cardName) }
+        songs.forEach { c -> if (info[c.cardSlug]?.let { !it.isSong } == true) issues += DeckIssue.SongInWrongSection(c.cardName) }
+
         // Cards in the wrong section.
         main.forEach { c -> if (info[c.cardSlug]?.let { it.isMaterial && !it.isBoon } == true) issues += DeckIssue.MainHasMaterial(c.cardName) }
         material.forEach { c -> if (info[c.cardSlug]?.let { !it.isMaterial } == true) issues += DeckIssue.MaterialHasMain(c.cardName) }
@@ -108,6 +123,8 @@ object DeckValidator {
 
         return DeckCheck(format, issues.distinct(), mainCount, materialCount, sideCount, unknown)
     }
+
+    const val MAX_SONGS = 4
 
     private fun hasLevelZero(material: List<DeckCard>, info: Map<String, CardDto>): Boolean {
         if (material.isEmpty()) return false

@@ -14,8 +14,8 @@ android {
         applicationId = "com.gascanner.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.5.1"
+        versionCode = 10
+        versionName = "0.5.2"
 
         // Phones only (ARM); leaves out emulator libraries to keep the APK small.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
@@ -52,6 +52,16 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // Name the APK after the version, e.g. ga-scanner-0.5.1.apk (instead of app-debug.apk).
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            val suffix = if (variant.buildType.name == "debug") "" else "-${variant.buildType.name}"
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "ga-scanner-${variant.versionName}$suffix.apk"
+        }
     }
 }
 

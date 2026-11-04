@@ -168,7 +168,7 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
             AddTarget.COLLECTION -> c.collection.removeOne(uuid, r.foil)
             AddTarget.SELL -> c.trade.removeOne(TradeListType.SELL, uuid, r.foil)
             AddTarget.BUY -> c.trade.removeOne(TradeListType.BUY, uuid, r.foil)
-            AddTarget.DECK -> r.section?.let { c.decks.removeOne(r.deckId, it, uuid) }
+            AddTarget.DECK -> r.section?.let { c.decks.removeOne(r.deckId, it, uuid, r.foil) }
         }
     }
 
@@ -182,13 +182,9 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
             AddTarget.BUY -> c.trade.add(TradeListType.BUY, candidate.card, edition, foil, 1)
             AddTarget.DECK -> {
                 val deckId = ensureScanDeck()
-                // Champions and regalia go to the material deck, Boons to their own section.
-                val section = when {
-                    candidate.card.isBoon -> DeckSection.BOONS
-                    candidate.card.isMaterial -> DeckSection.MATERIAL
-                    else -> DeckSection.MAIN
-                }
-                c.decks.addCard(deckId, section, candidate.card, edition, 1)
+                // Champions and regalia go to the material deck, Boons and Songs to their own section.
+                val section = com.gascanner.app.ui.card.defaultSection(candidate.card)
+                c.decks.addCard(deckId, section, candidate.card, edition, 1, foil)
                 lastAdd = AddRecord(candidate, AddTarget.DECK, foil, deckId, section)
                 if (!quiet) _messages.tryEmit(s.addedToDeck(1, candidate.card.name, sectionLabel(s, section).lowercase()))
                 return

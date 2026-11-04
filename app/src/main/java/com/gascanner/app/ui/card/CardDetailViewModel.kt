@@ -140,12 +140,12 @@ class CardDetailViewModel(
         viewModelScope.launch { c.collection.changeQuantity(entry, delta) }
     }
 
-    fun addToDeck(deckId: Long?, newDeckName: String?, section: DeckSection, quantity: Int, sectionLabel: String) {
+    fun addToDeck(deckId: Long?, newDeckName: String?, section: DeckSection, quantity: Int, foil: Boolean, sectionLabel: String) {
         val card = _state.value.card ?: return
         val edition = _state.value.selectedEdition ?: return
         viewModelScope.launch {
             val id = deckId ?: c.decks.createDeck(newDeckName?.ifBlank { null } ?: s.newDeck)
-            c.decks.addCard(id, section, card, edition, quantity)
+            c.decks.addCard(id, section, card, edition, quantity, foil)
             _messages.tryEmit(s.addedToDeck(quantity, card.name, sectionLabel))
         }
     }

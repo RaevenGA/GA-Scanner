@@ -55,8 +55,11 @@ interface DeckDao {
     @Query("SELECT * FROM deck_cards WHERE deckId = :deckId ORDER BY cardName COLLATE NOCASE")
     fun observeCards(deckId: Long): Flow<List<DeckCard>>
 
-    @Query("SELECT * FROM deck_cards WHERE deckId = :deckId AND section = :section AND editionUuid = :editionUuid LIMIT 1")
-    suspend fun findCard(deckId: Long, section: String, editionUuid: String): DeckCard?
+    @Query("SELECT * FROM deck_cards WHERE deckId = :deckId AND section = :section AND editionUuid = :editionUuid AND foil = :foil LIMIT 1")
+    suspend fun findCard(deckId: Long, section: String, editionUuid: String, foil: Boolean): DeckCard?
+
+    @Query("SELECT * FROM deck_cards")
+    suspend fun allCards(): List<DeckCard>
 
     @Insert
     suspend fun insertDeck(deck: Deck): Long
@@ -79,10 +82,21 @@ interface DeckDao {
 
 @Database(
     entities = [CollectionEntry::class, Deck::class, DeckCard::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun collectionDao(): CollectionDao
     abstract fun deckDao(): DeckDao
+
+    companion object {
+        /** 0.5.2: deck cards can be foil. Keeps all existing decks. */
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE deck_cards ADD COLUMN foil INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("DROP INDEX IF EXISTS index_deck_cards_deckId_section_editionUuid")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_deck_cards_deckId_section_editionUuid_foil ON deck_cards (deckId, section, editionUuid, foil)")
+            }
+        }
+    }
 }

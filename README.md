@@ -48,7 +48,8 @@ Languages: English · Polski · Deutsch · Français · Español
   - 🔄 cards on your list in another version;
   - 📚 cards that aren't on your list but are in your collection.
 - **Edit** any card (✎ or long-press): change the printing, foil, quantity and deck section.
-- **Decks** with Material, Main, Sideboard and Boons sections, a deck value and decklist sharing.
+- **Decks** with Material, Main, Sideboard and Boons sections, foil copies, a deck value with the price of each card, and decklist sharing.
+- **Song deck** (from *.asphodel/cantabile*): up to 4 Songs, allowed when Casella (level 1 or higher) is in the material deck.
 - **Legality check** for **Standard**, **Pantheon** and **Draft**, including banned and limited cards.
 
 ### Prices
@@ -79,6 +80,8 @@ Import accepts any CSV with a header row and at least a `name` column. It also r
 | Standard | ≥ 60, max 4 copies | ≤ 12, one copy each, Lv 0 champion | Sideboard ≤ 15 cards / 15 points |
 | Pantheon | ≥ 60, one copy each | exactly 12, Lv 0 champion | 1 Lesser + 1 Greater Boon, no sideboard |
 | Draft | ≥ 30 | no limit | — |
+
+Song deck: up to 4 Songs, only with a champion that allows it (Casella, level 1+). Songs can't go in the other sections.
 
 Banned and limited cards come from the official card database.
 
