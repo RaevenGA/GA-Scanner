@@ -230,6 +230,15 @@ open class Strings {
     open fun issueSongInWrongSection(card: String) = "$card: Songs go in the Song deck, and only Songs"
     open fun uncheckedCards(n: Int) = "$n cards couldn't be checked until the card database has downloaded."
     open fun deckValue(total: String) = "Deck value ≈ $total"
+    open fun sideboardPoints(points: Int, max: Int) = "$points/$max points"
+    open val deckToCollection = "Add deck to collection"
+    open val deckToCollectionHelp = "Adds this deck's cards (with their printing and foil) to your collection, so you don't have to scan them again."
+    open fun onlyMissingCopies(n: Int) = "Only missing copies ($n)"
+    open fun allDeckCopies(n: Int) = "All cards ($n)"
+    open fun deckAddedToCollection(n: Int) = "Added $n cards to your collection"
+    open val copies = "Copies"
+    open val autoAddCopies = "Copies with Auto-add"
+    open val autoAddCopiesHelp = "Live Auto-add puts in the number of copies set on the Scan screen instead of always one."
 
     // Settings
     open val settingsTitle = "Settings"

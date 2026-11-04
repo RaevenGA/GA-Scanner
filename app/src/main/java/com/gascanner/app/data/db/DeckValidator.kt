@@ -35,6 +35,8 @@ data class DeckCheck(
     val sideboardCount: Int,
     /** Cards we couldn't look up (offline data missing) — their rules weren't checked. */
     val unknownCards: Int,
+    /** Standard sideboard points: champions and regalia 3, other cards 1 (max 15). */
+    val sideboardPoints: Int = 0,
 ) {
     val legal: Boolean get() = issues.isEmpty()
 }
@@ -58,6 +60,7 @@ object DeckValidator {
         val materialCount = material.sumOf { it.quantity }
         val sideCount = side.sumOf { it.quantity }
         val unknown = cards.map { it.cardSlug }.distinct().count { it !in info }
+        val points = side.sumOf { c -> c.quantity * (if (info[c.cardSlug]?.isMaterial == true) 3 else 1) }
 
         val boons = cards.filter { it.section == DeckSection.BOONS.name }
         val boonCount = boons.sumOf { it.quantity }
@@ -69,7 +72,6 @@ object DeckValidator {
                 if (!hasLevelZero(material, info)) issues += DeckIssue.NoLevelZeroChampion()
                 copyLimit(main, 4, issues)
                 materialSingles(material, issues)
-                val points = side.sumOf { c -> c.quantity * (if (info[c.cardSlug]?.isMaterial == true) 3 else 1) }
                 if (sideCount > 15 || points > 15) issues += DeckIssue.SideboardTooBig(sideCount, points)
                 if (boonCount > 0) issues += DeckIssue.BoonsOnlyInPantheon(boonCount)
             }
@@ -121,7 +123,7 @@ object DeckValidator {
             else if (n > limit) issues += DeckIssue.OverLimit(card.name, n, limit)
         }
 
-        return DeckCheck(format, issues.distinct(), mainCount, materialCount, sideCount, unknown)
+        return DeckCheck(format, issues.distinct(), mainCount, materialCount, sideCount, unknown, points)
     }
 
     const val MAX_SONGS = 4

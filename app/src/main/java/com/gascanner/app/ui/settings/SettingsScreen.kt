@@ -155,6 +155,8 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
 
     fun checkUpdate() = c.appScope.launch { c.updates.check(force = true) }
 
+    fun setAutoAddCopies(on: Boolean) = c.appScope.launch { c.settings.setAutoAddCopies(on) }
+
     fun setOfflineImages(on: Boolean) {
         c.appScope.launch {
             c.settings.setOfflineImages(on)
@@ -260,6 +262,15 @@ fun SettingsScreen() {
                     FilterChip(selected = st.scanMode == ScanMode.CLAUDE, onClick = { vm.setScanMode(ScanMode.CLAUDE) }, label = { Text(s.scanClaude) })
                 }
                 SmallNote(if (st.scanMode == ScanMode.ON_DEVICE) s.scanOnDeviceInfo else s.scanClaudeInfo)
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(s.autoAddCopies, style = MaterialTheme.typography.bodyLarge)
+                        SmallNote(s.autoAddCopiesHelp)
+                    }
+                    Switch(checked = st.autoAddCopies, onCheckedChange = { vm.setAutoAddCopies(it) })
+                }
             }
             if (st.scanMode == ScanMode.CLAUDE) {
                 item { ApiKeyField(st.anthropicApiKey, onSave = { vm.saveApiKey(it) }) }

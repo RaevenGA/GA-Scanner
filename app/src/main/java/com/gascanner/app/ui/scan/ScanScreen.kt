@@ -104,6 +104,7 @@ import com.gascanner.app.scan.loadCapture
 import com.gascanner.app.scan.rarityLabel
 import com.gascanner.app.scan.toCapture
 import com.gascanner.app.scan.toUprightBitmap
+import com.gascanner.app.ui.common.QuantityStepper
 import com.gascanner.app.ui.common.CardThumb
 import com.gascanner.app.ui.common.CenteredMessage
 import com.gascanner.app.ui.common.ScreenScaffold
@@ -132,6 +133,8 @@ fun ScanScreen(
     val decks by vm.decks.collectAsStateWithLifecycle()
     val scanDeckId by vm.scanDeckId.collectAsStateWithLifecycle()
     val scanFoil by vm.scanFoil.collectAsStateWithLifecycle()
+    val copies by vm.copies.collectAsStateWithLifecycle()
+    val autoAddCopies by vm.autoAddCopies.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -316,6 +319,10 @@ fun ScanScreen(
                 onCreateDeck = { vm.createDeck(it) },
                 scanFoil = scanFoil,
                 onScanFoil = vm::setScanFoil,
+                // With Auto-add, every card gets one copy unless Settings says otherwise.
+                showCopies = !(captureMode == CaptureMode.LIVE && autoAdd && !autoAddCopies),
+                copies = copies,
+                onCopies = vm::setCopies,
             )
 
             when (val st = state) {
@@ -372,6 +379,9 @@ private fun TargetRow(
     onCreateDeck: (String) -> Unit,
     scanFoil: Boolean,
     onScanFoil: (Boolean) -> Unit,
+    showCopies: Boolean,
+    copies: Int,
+    onCopies: (Int) -> Unit,
 ) {
     val s = LocalStrings.current
     var deckMenu by remember { mutableStateOf(false) }
@@ -404,6 +414,11 @@ private fun TargetRow(
             }
         }
         FilterChip(selected = scanFoil, onClick = { onScanFoil(!scanFoil) }, label = { Text(s.scanAsFoil) })
+        if (showCopies) {
+            Spacer(Modifier.width(6.dp))
+            Text(s.copies, style = MaterialTheme.typography.labelLarge)
+            QuantityStepper(copies, onChange = { onCopies(copies + it) })
+        }
         if (showAutoAdd) {
             Spacer(Modifier.width(6.dp))
             Text(s.autoAdd, style = MaterialTheme.typography.labelLarge)
