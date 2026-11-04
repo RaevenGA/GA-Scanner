@@ -230,7 +230,6 @@ open class Strings {
     open fun issueSongInWrongSection(card: String) = "$card: Songs go in the Song deck, and only Songs"
     open fun uncheckedCards(n: Int) = "$n cards couldn't be checked until the card database has downloaded."
     open fun deckValue(total: String) = "Deck value ≈ $total"
-    open fun pricedOf(priced: Int, total: Int) = "prices for $priced of $total cards"
 
     // Settings
     open val settingsTitle = "Settings"

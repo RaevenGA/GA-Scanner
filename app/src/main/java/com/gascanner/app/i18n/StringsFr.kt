@@ -252,7 +252,7 @@ object StringsFr : Strings() {
     override fun corrected(card: String, version: String) = "Corrigé en $card $version"
     override fun cardsCount(n: Int) = if (n == 1) "1 carte" else "$n cartes"
     override fun value(total: String) = "Valeur ≈ $total"
-    override fun pricedOf(priced: Int, total: Int) = "prix pour $priced cartes sur $total"
+    override fun pricedOf(n: Int, m: Int) = "$n cartes sur $m avec un prix"
     override fun updatingPrices(done: Int, total: Int) = "Mise à jour des prix… $done / $total"
     override fun importing(done: Int, total: Int) = "Import… $done / $total"
     override fun importDone(added: Int, failed: Int) = if (failed == 0) "$added cartes importées." else "$added cartes importées. $failed lignes non reconnues."

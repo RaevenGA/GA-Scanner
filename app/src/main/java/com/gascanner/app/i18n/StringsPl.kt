@@ -252,7 +252,7 @@ object StringsPl : Strings() {
     override fun corrected(card: String, version: String) = "Poprawiono na $card $version"
     override fun cardsCount(n: Int) = plural(n, "$n karta", "$n karty", "$n kart")
     override fun value(total: String) = "Wartość ≈ $total"
-    override fun pricedOf(priced: Int, total: Int) = "ceny dla $priced z $total kart"
+    override fun pricedOf(n: Int, m: Int) = "Wycenione: $n z $m"
     override fun updatingPrices(done: Int, total: Int) = "Aktualizacja cen… $done / $total"
     override fun importing(done: Int, total: Int) = "Importowanie… $done / $total"
     override fun importDone(added: Int, failed: Int) = if (failed == 0) "Zaimportowano karty: $added." else "Zaimportowano karty: $added. Nierozpoznane wiersze: $failed."
