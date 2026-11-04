@@ -353,6 +353,12 @@ class FinishAndRarityTest {
         assertEquals(7, com.gascanner.app.scan.rarityFromText("Collector Super Rare"))
     }
 
+    @Test fun storeMatchSkipsSealedProducts() {
+        assertEquals(0, StorePriceProvider.matchScore(".asphodel/paradise: Starter Deck: Dante, Hemomancer – EN", "Dante, Hemomancer", "PRDSD", "005"))
+        assertEquals(0, StorePriceProvider.matchScore("Pantheon Deck: Casella, Sky's Cantatrice", "Casella, Sky's Cantatrice", "X", "001"))
+        assertTrue(StorePriceProvider.matchScore("Dante, Hemomancer PRDSD • 005 • C • NF", "Dante, Hemomancer", "PRDSD", "005") > 0)
+    }
+
     @Test fun storeMatchSkipsOtherRarity() {
         assertEquals(0, StorePriceProvider.matchScore("Dante, Prodigal Swain DOA • 001 • CSR • F", "Dante, Prodigal Swain", "DOA", "001", 1))
         assertTrue(StorePriceProvider.matchScore("Dante, Prodigal Swain DOA • 001 • CSR • F", "Dante, Prodigal Swain", "DOA", "001", 7) > 0)
