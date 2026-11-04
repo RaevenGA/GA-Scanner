@@ -75,6 +75,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -238,7 +240,11 @@ fun ScanScreen(
                     }
                 }
             }
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+            // Drawn above the camera, which can briefly render larger than its area after a tab switch.
+            SingleChoiceSegmentedButtonRow(
+                Modifier.zIndex(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
                 val modes = listOf(CaptureMode.LIVE to s.modeLive, CaptureMode.PHOTO to s.modePhoto, CaptureMode.MULTI to s.modeMulti)
                 modes.forEachIndexed { i, (mode, label) ->
                     SegmentedButton(
@@ -249,7 +255,7 @@ fun ScanScreen(
                 }
             }
 
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                 if (granted) {
                     CameraPreview(imageCapture, analysis, torch, onHasFlash = { hasFlash = it }, modifier = Modifier.fillMaxSize())
                     if (captureMode != CaptureMode.MULTI) {
@@ -590,5 +596,5 @@ private fun CameraPreview(
             provider?.unbindAll()
         }
     }
-    AndroidView(factory = { previewView }, modifier = modifier)
+    AndroidView(factory = { previewView }, modifier = modifier.clipToBounds())
 }
