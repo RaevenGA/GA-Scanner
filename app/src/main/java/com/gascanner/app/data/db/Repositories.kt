@@ -93,8 +93,9 @@ class DeckRepository(private val dao: DeckDao) {
     suspend fun renameDeck(deck: Deck, name: String) = dao.updateDeck(deck.copy(name = name.trim()))
     suspend fun deleteDeck(deck: Deck) = dao.deleteDeck(deck)
 
-    suspend fun addCard(deckId: Long, section: DeckSection, card: CardDto, edition: EditionDto, quantity: Int = 1) {
-        val existing = dao.findCard(deckId, section.name, edition.uuid)
+    suspend fun addCard(deckId: Long, section: DeckSection, card: CardDto, edition: EditionDto, quantity: Int = 1, foilIn: Boolean = false) {
+        val foil = edition.fixFoil(foilIn)
+        val existing = dao.findCard(deckId, section.name, edition.uuid, foil)
         if (existing != null) {
             dao.updateCard(existing.copy(quantity = existing.quantity + quantity))
         } else {
@@ -108,28 +109,46 @@ class DeckRepository(private val dao: DeckDao) {
                     setPrefix = edition.setPrefix,
                     imageUrl = edition.imageUrl,
                     quantity = quantity,
+                    foil = foil,
                 )
             )
         }
     }
 
-    /** Change printing / section / quantity of a deck entry; merges into an existing entry. */
-    suspend fun edit(entry: DeckCard, card: CardDto, edition: EditionDto, section: DeckSection, quantity: Int) {
+    /** Change printing / foil / section / quantity of a deck entry; merges into an existing entry. */
+    suspend fun edit(entry: DeckCard, card: CardDto, edition: EditionDto, section: DeckSection, quantity: Int, foilIn: Boolean = entry.foil) {
         if (quantity <= 0) {
             dao.deleteCard(entry)
             return
         }
-        if (entry.editionUuid == edition.uuid && entry.section == section.name) {
+        val foil = edition.fixFoil(foilIn)
+        if (entry.editionUuid == edition.uuid && entry.section == section.name && entry.foil == foil) {
             dao.updateCard(entry.copy(quantity = quantity))
             return
         }
         dao.deleteCard(entry)
-        addCard(entry.deckId, section, card, edition, quantity)
+        addCard(entry.deckId, section, card, edition, quantity, foil)
     }
 
     /** Remove one copy (used to undo a scan). */
-    suspend fun removeOne(deckId: Long, section: DeckSection, editionUuid: String) {
-        dao.findCard(deckId, section.name, editionUuid)?.let { changeQuantity(it, -1) }
+    suspend fun removeOne(deckId: Long, section: DeckSection, editionUuid: String, foil: Boolean = false) {
+        dao.findCard(deckId, section.name, editionUuid, foil)?.let { changeQuantity(it, -1) }
+    }
+
+    /** Same as [CollectionRepository.fixFinishes], for deck cards. */
+    suspend fun fixFinishes(lookup: suspend (String) -> EditionDto?): Int {
+        var changed = 0
+        for (entry in dao.allCards()) {
+            val edition = lookup(entry.editionUuid) ?: continue
+            val foil = edition.fixFoil(entry.foil)
+            if (foil == entry.foil) continue
+            dao.deleteCard(entry)
+            val existing = dao.findCard(entry.deckId, entry.section, entry.editionUuid, foil)
+            if (existing != null) dao.updateCard(existing.copy(quantity = existing.quantity + entry.quantity))
+            else dao.insertCard(entry.copy(id = 0, foil = foil))
+            changed++
+        }
+        return changed
     }
 
     suspend fun changeQuantity(card: DeckCard, delta: Int) {

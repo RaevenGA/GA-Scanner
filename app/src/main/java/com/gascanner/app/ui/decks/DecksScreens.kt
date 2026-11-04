@@ -82,6 +82,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.CancellationException
+import androidx.compose.material.icons.filled.Refresh
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -160,39 +162,86 @@ class DeckDetailViewModel(private val deckId: Long, private val c: AppContainer)
     private val info = MutableStateFlow<Map<String, CardDto>>(emptyMap())
     val check: StateFlow<DeckCheck?> = combine(format, cards, info) { f, list, i -> DeckValidator.check(f, list, i) }.state(null)
 
-    private val _value = MutableStateFlow<Money?>(null)
-    val value: StateFlow<Money?> = _value.asStateFlow()
+    private val _value = MutableStateFlow<DeckValue?>(null)
+    val value: StateFlow<DeckValue?> = _value.asStateFlow()
+    private val _busy = MutableStateFlow<String?>(null)
+    val busy: StateFlow<String?> = _busy.asStateFlow()
+    private val s get() = c.strings.value
+
+    /** Cards whose shop price was already looked up while this deck was open (found or not). */
+    private val fetched = HashSet<String>()
 
     init {
         viewModelScope.launch {
-            cards.collectLatest { list ->
+            combine(cards, c.settings.settings) { list, _ -> list }.collectLatest { list ->
                 val map = runCatching { c.cards.cardsBySlug(list.map { it.cardSlug }.toSet()) }.getOrDefault(emptyMap())
                 info.value = map
-                _value.value = deckValue(list, map)
+                val v = deckValue(list, map)
+                _value.value = v
+                // Cards without a saved price yet: ask the default shop once (e.g. Caduko with TCGplayer off).
+                val missing = list.filter { it.id !in v.prices && key(it) !in fetched }
+                if (missing.isNotEmpty()) {
+                    refresh(missing.map { item(it, map) })
+                    missing.forEach { fetched += key(it) }
+                    _value.value = deckValue(list, map)
+                }
             }
         }
     }
 
-    private suspend fun deckValue(list: List<DeckCard>, map: Map<String, CardDto>): Money? {
-        if (list.isEmpty()) return null
+    private fun key(dc: DeckCard) = "${dc.editionUuid}|${dc.foil}"
+
+    private fun item(dc: DeckCard, map: Map<String, CardDto>): PricedItem {
+        val edition = map[dc.cardSlug]?.allEditions?.firstOrNull { it.uuid == dc.editionUuid }
+        return PricedItem(dc.editionUuid, dc.cardName, dc.setPrefix, edition?.set?.name.orEmpty(), edition?.collectorNumber.orEmpty(), dc.foil)
+    }
+
+    private suspend fun deckValue(list: List<DeckCard>, map: Map<String, CardDto>): DeckValue {
         val currency = c.prices.totalCurrency()
         val cached = c.prices.allCached()
         var total = 0.0
+        val prices = HashMap<Long, Money>()
         for (dc in list) {
-            val edition = map[dc.cardSlug]?.allEditions?.firstOrNull { it.uuid == dc.editionUuid }
-            val item = PricedItem(dc.editionUuid, dc.cardName, dc.setPrefix, edition?.set?.name.orEmpty(), edition?.collectorNumber.orEmpty(), false)
-            val m = runCatching { c.prices.estimate(item, cached) }.getOrNull() ?: continue
+            val m = runCatching { c.prices.estimate(item(dc, map), cached) }.getOrNull() ?: continue
             val conv = if (m.currency == currency) m else c.prices.convert(m, currency) ?: continue
+            prices[dc.id] = conv
             total += conv.amount * dc.quantity
         }
-        return if (total > 0) Money(total, currency) else null
+        val pricedCopies = list.filter { it.id in prices }.sumOf { it.quantity }
+        return DeckValue(if (total > 0) Money(total, currency) else null, prices, pricedCopies, list.sumOf { it.quantity })
+    }
+
+    private suspend fun refresh(items: List<PricedItem>) {
+        if (items.isEmpty()) return
+        val list = items.distinctBy { "${it.editionUuid}|${it.foil}" }
+        try {
+            _busy.value = s.updatingPrices(0, list.size)
+            c.prices.refreshDefault(list) { done, total -> _busy.value = s.updatingPrices(done, total) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        } finally {
+            _busy.value = null
+        }
+    }
+
+    /** Fetch the default shop's price for every card in the deck again. */
+    fun updatePrices() {
+        if (_busy.value != null) return
+        viewModelScope.launch {
+            val list = cards.value
+            val map = info.value
+            refresh(list.map { item(it, map) })
+            list.forEach { fetched += key(it) }
+            _value.value = deckValue(list, map)
+        }
     }
 
     fun setFormat(f: GameFormat) = viewModelScope.launch { c.settings.setDeckFormat(deckId, f.name) }
     fun setViewMode(m: ViewMode) = viewModelScope.launch { c.settings.setViewMode(m) }
     fun change(card: DeckCard, delta: Int) = viewModelScope.launch { repo.changeQuantity(card, delta) }
     fun edit(entry: DeckCard, e: com.gascanner.app.ui.common.EntryEdit) =
-        viewModelScope.launch { repo.edit(entry, e.card, e.edition, e.section ?: DeckSection.MAIN, e.quantity) }
+        viewModelScope.launch { repo.edit(entry, e.card, e.edition, e.section ?: DeckSection.MAIN, e.quantity, e.foil) }
     fun rename(name: String) = viewModelScope.launch { deck.value?.let { repo.renameDeck(it, name) } }
     fun delete(then: () -> Unit) = viewModelScope.launch {
         deck.value?.let { repo.deleteDeck(it) }
@@ -217,6 +266,9 @@ fun exportDecklist(s: Strings, name: String, cards: List<DeckCard>): String = bu
 
 fun issueText(s: Strings, issue: DeckIssue): String = when (issue) {
     is DeckIssue.MainTooSmall -> s.issueMainTooSmall(issue.count, issue.min)
+    is DeckIssue.SongDeckNeedsChampion -> s.issueSongDeckNeedsChampion
+    is DeckIssue.SongDeckTooBig -> s.issueSongDeckTooBig(issue.count, issue.max)
+    is DeckIssue.SongInWrongSection -> s.issueSongInWrongSection(issue.cardName)
     is DeckIssue.MaterialTooBig -> s.issueMaterialTooBig(issue.count, issue.max)
     is DeckIssue.NoLevelZeroChampion -> s.issueNoLevelZero
     is DeckIssue.TooManyCopies -> s.issueTooManyCopies(issue.cardName, issue.count, issue.max)
@@ -249,6 +301,7 @@ fun DeckDetailScreen(
     val format by vm.format.collectAsStateWithLifecycle()
     val check by vm.check.collectAsStateWithLifecycle()
     val value by vm.value.collectAsStateWithLifecycle()
+    val busy by vm.busy.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -269,6 +322,8 @@ fun DeckDetailScreen(
             }) { Icon(Icons.Default.Share, s.shareDecklist) }
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, s.more) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text(s.updatePrices) }, leadingIcon = { Icon(Icons.Default.Refresh, null) },
+                    onClick = { menu = false; vm.updatePrices() })
                 DropdownMenuItem(text = { Text(s.renameDeck) }, leadingIcon = { Icon(Icons.Default.Edit, null) },
                     onClick = { menu = false; renaming = true })
                 DropdownMenuItem(text = { Text(s.deleteDeck) }, leadingIcon = { Icon(Icons.Default.Delete, null) },
@@ -292,7 +347,12 @@ fun DeckDetailScreen(
                         .forEach { (f, label) -> FilterChip(selected = format == f, onClick = { vm.setFormat(f) }, label = { Text(label) }) }
                 }
                 check?.let { CheckCard(it) }
-                value?.let { SmallNote(s.deckValue(it.format()), Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) }
+                value?.total?.let { total ->
+                    val v = value!!
+                    val text = s.deckValue(total.format()) + if (v.pricedCopies < v.totalCopies) " · " + s.pricedOf(v.pricedCopies, v.totalCopies) else ""
+                    SmallNote(text, Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+                }
+                busy?.let { SmallNote(it, Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) }
             }
         }
         if (viewMode == ViewMode.LIST) {
@@ -310,7 +370,13 @@ fun DeckDetailScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(card.cardName, style = MaterialTheme.typography.bodyLarge)
-                                SmallNote(card.setPrefix)
+                                SmallNote(
+                                    listOfNotNull(
+                                        card.setPrefix.ifBlank { null },
+                                        if (card.foil) s.foil else null,
+                                        value?.prices?.get(card.id)?.format(),
+                                    ).joinToString(" · ")
+                                )
                             }
                             IconButton(onClick = { editing = card }) { Icon(Icons.Default.Edit, s.edit) }
                             QuantityStepper(card.quantity, onChange = { vm.change(card, it) })
@@ -337,8 +403,8 @@ fun DeckDetailScreen(
                             imageUrl = card.imageUrl,
                             title = card.cardName,
                             quantity = card.quantity,
-                            foil = false,
-                            price = null,
+                            foil = card.foil,
+                            price = value?.prices?.get(card.id)?.format(),
                             onClick = { onOpenCard(card.cardSlug, card.editionUuid) },
                             onLongClick = { editing = card },
                         )
@@ -353,7 +419,7 @@ fun DeckDetailScreen(
             cardSlug = entry.cardSlug,
             cardName = entry.cardName,
             editionUuid = entry.editionUuid,
-            foil = null,
+            foil = entry.foil,
             quantity = entry.quantity,
             section = runCatching { DeckSection.valueOf(entry.section) }.getOrDefault(DeckSection.MAIN),
             priceFields = null,
@@ -432,3 +498,6 @@ private fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, on
         dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
     )
 }
+
+/** Deck value: total, price per deck entry (by id), and how many copies have a price. */
+data class DeckValue(val total: Money?, val prices: Map<Long, Money>, val pricedCopies: Int, val totalCopies: Int)

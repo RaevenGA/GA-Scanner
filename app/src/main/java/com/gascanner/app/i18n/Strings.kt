@@ -105,6 +105,8 @@ open class Strings {
     open val sectionSideboardShort = "Side"
     open val sectionBoons = "Boons"
     open val sectionBoonsShort = "Boons"
+    open val sectionSongs = "Song deck"
+    open val sectionSongsShort = "Songs"
     open fun addedToCollection(n: Int, card: String) = "Added $n × $card to collection"
     open fun addedToDeck(n: Int, card: String, section: String) = "Added $n × $card to $section"
     open fun addedToSell(n: Int, card: String) = "Added $n × $card to sell list"
@@ -223,8 +225,12 @@ open class Strings {
     open fun issueBoons(lesser: Int, greater: Int) = "Pantheon needs one Lesser and one Greater Boon (deck has $lesser Lesser, $greater Greater)"
     open fun issueBoonsOnlyPantheon(count: Int) = "Boons are only used in Pantheon ($count in this deck)"
     open fun issueBoonWrongSection(card: String) = "$card belongs in the Boons section"
+    open val issueSongDeckNeedsChampion = "A Song deck needs a champion that allows it (Casella, level 1 or higher) in the material deck"
+    open fun issueSongDeckTooBig(count: Int, max: Int) = "Song deck has $count cards (max $max)"
+    open fun issueSongInWrongSection(card: String) = "$card: Songs go in the Song deck, and only Songs"
     open fun uncheckedCards(n: Int) = "$n cards couldn't be checked until the card database has downloaded."
     open fun deckValue(total: String) = "Deck value ≈ $total"
+    open fun pricedOf(priced: Int, total: Int) = "prices for $priced of $total cards"
 
     // Settings
     open val settingsTitle = "Settings"

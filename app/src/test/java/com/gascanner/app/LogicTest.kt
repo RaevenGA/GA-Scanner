@@ -366,3 +366,35 @@ class FinishAndRarityTest {
         assertTrue(tcg.score(common, "DOA", "Dawn of Ashes", "001", 1) > tcg.score(csr, "DOA", "Dawn of Ashes", "001", 1))
     }
 }
+
+class SongDeckTest {
+    private fun card(slug: String, name: String, types: List<String>, level: Int? = null) = CardDto(
+        uuid = slug, slug = slug, name = name, types = types, level = level?.let { JsonPrimitive(it) },
+    )
+    private fun dc(slug: String, section: DeckSection, qty: Int = 1) =
+        DeckCard(deckId = 1, section = section.name, cardSlug = slug, cardName = slug, editionUuid = slug, setPrefix = "X", imageUrl = null, quantity = qty)
+
+    private val info = mapOf(
+        "spirit" to card("spirit", "Spirit of Wind", listOf("CHAMPION"), level = 0),
+        "casella" to card("casella", "Casella, Sky's Cantatrice", listOf("CHAMPION"), level = 1),
+        "other" to card("other", "Lorraine, Wandering Warrior", listOf("CHAMPION"), level = 1),
+    ) + (1..5).associate { "song$it" to card("song$it", "Song $it", listOf("ACTION", "SONG")) } +
+        (1..60).associate { "m$it" to card("m$it", "Card $it", listOf("ACTION")) }
+
+    private fun deck(champ: String, songs: Int) = listOf(dc("spirit", DeckSection.MATERIAL), dc(champ, DeckSection.MATERIAL)) +
+        (1..60).map { dc("m$it", DeckSection.MAIN) } + (1..songs).map { dc("song$it", DeckSection.SONGS) }
+
+    @Test fun casellaOpensSongDeck() {
+        val check = DeckValidator.check(GameFormat.STANDARD, deck("casella", 4), info)
+        assertTrue(check.issues.toString(), check.legal)
+    }
+
+    @Test fun songDeckProblems() {
+        val noCasella = DeckValidator.check(GameFormat.STANDARD, deck("other", 2), info).issues
+        assertTrue(noCasella.any { it is DeckIssue.SongDeckNeedsChampion })
+        val tooMany = DeckValidator.check(GameFormat.STANDARD, deck("casella", 5), info).issues
+        assertTrue(tooMany.any { it is DeckIssue.SongDeckTooBig })
+        val inMain = DeckValidator.check(GameFormat.STANDARD, deck("casella", 0) + dc("song1", DeckSection.MAIN), info).issues
+        assertTrue(inMain.any { it is DeckIssue.SongInWrongSection })
+    }
+}

@@ -63,6 +63,18 @@ data class CardDto(
     val isLesserBoon: Boolean get() = isBoon && (subtypes + types + listOf(name)).any { it.contains("LESSER", ignoreCase = true) }
     val isGreaterBoon: Boolean get() = isBoon && (subtypes + types + listOf(name)).any { it.contains("GREATER", ignoreCase = true) }
 
+    /** Songs go to the Song deck (from .asphodel/cantabile). */
+    val isSong: Boolean get() = (types + subtypes).any { it.equals("SONG", ignoreCase = true) }
+
+    /**
+     * Champions that open a Song deck: Casella from level 1, or any champion whose text mentions
+     * a Song deck (so future ones work once they're in the database).
+     */
+    val allowsSongDeck: Boolean get() = isChampion && (
+        (name.startsWith("Casella", ignoreCase = true) && (levelNumber ?: 0) >= 1) ||
+            effectRaw.asText()?.contains("song deck", ignoreCase = true) == true
+        )
+
     /** Material deck cards are champions and regalia. */
     val isMaterial: Boolean get() = isChampion || isRegalia
 

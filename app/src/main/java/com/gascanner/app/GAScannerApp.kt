@@ -63,6 +63,7 @@ class GAScannerApp : Application(), coil.ImageLoaderFactory {
                 val lookup: suspend (String) -> com.gascanner.app.data.api.EditionDto? = { c.cards.byEditionUuid(it)?.edition }
                 c.collection.fixFinishes(lookup)
                 c.trade.fixFinishes(lookup)
+                c.decks.fixFinishes(lookup)
             }
             if (c.settings.current().offlineImages) c.images.downloadAll(c.cards.allImageUrls())
         }
@@ -102,7 +103,9 @@ class AppContainer(context: Context) {
         .build()
 
     // User data: unchanged schema from version 0.1, so existing collections are kept.
-    private val db: AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "ga_scanner.db").build()
+    private val db: AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "ga_scanner.db")
+        .addMigrations(AppDatabase.MIGRATION_1_2)
+        .build()
 
     // Sell / buy lists.
     private val listsDb: ListsDatabase = Room.databaseBuilder(context, ListsDatabase::class.java, "ga_lists.db").build()

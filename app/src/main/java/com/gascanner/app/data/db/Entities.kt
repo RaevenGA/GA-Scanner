@@ -35,6 +35,8 @@ data class Deck(
 enum class DeckSection(val label: String) {
     MATERIAL("Material deck"),
     MAIN("Main deck"),
+    /** Up to 4 Songs, only with a champion that allows a Song deck (Casella). */
+    SONGS("Song deck"),
     SIDEBOARD("Sideboard"),
     /** Pantheon only: one Lesser and one Greater Boon. */
     BOONS("Boons"),
@@ -50,7 +52,7 @@ enum class DeckSection(val label: String) {
             onDelete = ForeignKey.CASCADE,
         )
     ],
-    indices = [Index("deckId"), Index(value = ["deckId", "section", "editionUuid"], unique = true)]
+    indices = [Index("deckId"), Index(value = ["deckId", "section", "editionUuid", "foil"], unique = true)]
 )
 data class DeckCard(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -62,6 +64,7 @@ data class DeckCard(
     val setPrefix: String,
     val imageUrl: String?,
     val quantity: Int,
+    @androidx.room.ColumnInfo(defaultValue = "0") val foil: Boolean = false,
 )
 
 data class DeckWithCount(
