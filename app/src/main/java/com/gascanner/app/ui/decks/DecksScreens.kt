@@ -472,7 +472,7 @@ fun DeckDetailScreen(
         )
     }
     if (toCollection) {
-        val plan by androidx.compose.runtime.produceState<Pair<Int, Int>?>(null) { value = vm.collectionPlan() }
+        val plan by androidx.compose.runtime.produceState<Pair<Int, Int>?>(null) { this.value = vm.collectionPlan() }
         AlertDialog(
             onDismissRequest = { toCollection = false },
             title = { Text(s.deckToCollection) },
