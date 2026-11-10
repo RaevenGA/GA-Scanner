@@ -84,6 +84,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.CancellationException
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.filled.LibraryAdd
 import kotlinx.coroutines.flow.map
@@ -278,6 +281,12 @@ class DeckDetailViewModel(private val deckId: Long, private val c: AppContainer)
     fun setFormat(f: GameFormat) = viewModelScope.launch { c.settings.setDeckFormat(deckId, f.name) }
     fun setViewMode(m: ViewMode) = viewModelScope.launch { c.settings.setViewMode(m) }
     fun change(card: DeckCard, delta: Int) = viewModelScope.launch { repo.changeQuantity(card, delta) }
+    /** Scanned cards will default to this deck in the review screen. */
+    fun scanForThisDeck() = viewModelScope.launch {
+        c.settings.setScanDeck(deckId)
+        c.settings.setScanTarget(com.gascanner.app.data.settings.AddTarget.DECK)
+    }
+
     fun edit(entry: DeckCard, e: com.gascanner.app.ui.common.EntryEdit) =
         viewModelScope.launch { repo.edit(entry, e.card, e.edition, e.section ?: DeckSection.MAIN, e.quantity, e.foil) }
     fun rename(name: String) = viewModelScope.launch { deck.value?.let { repo.renameDeck(it, name) } }
@@ -328,7 +337,9 @@ fun DeckDetailScreen(
     deckId: Long,
     onBack: () -> Unit,
     onOpenCard: (slug: String, editionUuid: String?) -> Unit,
-    onAddCards: () -> Unit,
+    onSearchCards: () -> Unit,
+    onScanCards: () -> Unit,
+    onFromCollection: () -> Unit,
 ) {
     val container = appContainer()
     val s = LocalStrings.current
@@ -346,6 +357,7 @@ fun DeckDetailScreen(
     var menu by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<DeckCard?>(null) }
     var toCollection by remember { mutableStateOf(false) }
+    var addChooser by remember { mutableStateOf(false) }
     val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
 
@@ -375,7 +387,7 @@ fun DeckDetailScreen(
             }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = onAddCards, icon = { Icon(Icons.Default.Add, null) }, text = { Text(s.addCards) })
+            ExtendedFloatingActionButton(onClick = { addChooser = true }, icon = { Icon(Icons.Default.Add, null) }, text = { Text(s.addCards) })
         },
     ) { padding ->
         if (cards.isEmpty()) {
@@ -469,6 +481,31 @@ fun DeckDetailScreen(
             priceFields = null,
             onDismiss = { editing = null },
             onSave = { e -> vm.edit(entry, e); editing = null },
+        )
+    }
+    if (addChooser) {
+        AlertDialog(
+            onDismissRequest = { addChooser = false },
+            title = { Text(s.addCards) },
+            text = {
+                Column {
+                    val fromCollection: () -> Unit = { onFromCollection() }
+                    val byScanning: () -> Unit = { vm.scanForThisDeck(); onScanCards() }
+                    val bySearching: () -> Unit = { onSearchCards() }
+                    listOf(
+                        Triple(Icons.Default.CollectionsBookmark, s.addFromCollection, fromCollection),
+                        Triple(Icons.Default.CameraAlt, s.addByScanning, byScanning),
+                        Triple(Icons.Default.Search, s.addBySearching, bySearching),
+                    ).forEach { (icon, label, action) ->
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(label) },
+                            leadingContent = { Icon(icon, null) },
+                            modifier = Modifier.clickable { addChooser = false; action() },
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { addChooser = false }) { Text(s.cancel) } },
         )
     }
     if (toCollection) {

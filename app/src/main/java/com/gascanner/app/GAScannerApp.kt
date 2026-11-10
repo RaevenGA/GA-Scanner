@@ -134,6 +134,11 @@ class AppContainer(context: Context) {
     val collection = CollectionRepository(db.collectionDao())
     val decks = DeckRepository(db.deckDao())
     val trade = TradeRepository(listsDb.trade())
+
+    // Scanned cards waiting to be reviewed.
+    private val scanDb: com.gascanner.app.data.scan.ScanDatabase =
+        Room.databaseBuilder(context, com.gascanner.app.data.scan.ScanDatabase::class.java, "ga_scan.db").build()
+    val tray = com.gascanner.app.data.scan.ScanTray(scanDb.items())
     val importExport = ImportExport(cards, collection, trade)
     val images = com.gascanner.app.data.images.ImageStore(context, http)
     val updates = com.gascanner.app.data.update.UpdateChecker(http, json)

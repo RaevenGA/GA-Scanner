@@ -19,13 +19,12 @@ Languages: English · Polski · Deutsch · Français · Español
   1st / Alter edition, collector number and **rarity**. This identifies the exact printing.
 - **Three modes**
   - **Live**: point the camera at cards one after another. A vibration confirms each card.
-    - With **Auto-add** on, every card is added automatically. Swapping in an identical card is noticed, too.
+    - With **Auto-add** on, every card is added automatically. Swapping in an identical card is noticed, too. Scanning the same printing again adds one more copy.
     - If a card was first recognised by name only and the bottom line later shows another printing, the add is corrected automatically.
     - **Undo** removes the last card added.
   - **Photo**: one card per photo, with alternatives to choose from.
   - **Several**: one photo of several cards laid out with their bottom edge visible.
-- **Add to**: Collection, Want to sell, Want to buy, or a **deck**. In a deck, champions and regalia go to the material deck automatically.
-- **Copies**: add several copies of a scanned card at once (goes back to 1 after each add). Auto-add always adds one copy unless *Copies with Auto-add* is on in Settings.
+- **Scanned list**: every scanned card goes on a list first (it's kept if the app closes). On the list you can change the quantity, foil and printing, see the default shop's price and the total, and then add everything to your Collection, Want to sell, Want to buy or a **deck**. For the sell list and decks, the app asks whether to add the cards to your collection too. In a deck, champions and regalia go to the material deck automatically.
 - **Foil** switch for scanning a pile of foils (the camera can't reliably tell foils apart).
   Printings that only exist as foil (collector rarities CSR / CUR / CPR, promos and others) are always saved as foil, and non-foil-only ones as non-foil.
 - **Flashlight** button for darker rooms.
@@ -50,6 +49,7 @@ Languages: English · Polski · Deutsch · Français · Español
   - 📚 cards that aren't on your list but are in your collection.
 - **Edit** any card (✎ or long-press): change the printing, foil, quantity and deck section.
 - **Decks** with Material, Main, Sideboard and Boons sections, foil copies, a deck value with the price of each card, and decklist sharing.
+- **Add cards to a deck** from your collection, by scanning, or by searching.
 - **Add deck to collection** (deck menu): all the deck's cards, or only the copies you don't have yet.
 - **Sideboard points** shown next to the sideboard in Standard (champions and regalia 3, other cards 1, max 15).
 - **Song deck** (from *.asphodel/cantabile*): up to 4 Songs, allowed when Casella (level 1 or higher) is in the material deck.

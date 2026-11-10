@@ -38,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -90,8 +91,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gascanner.app.appContainer
-import com.gascanner.app.data.db.DeckWithCount
-import com.gascanner.app.data.settings.AddTarget
 import com.gascanner.app.i18n.LocalStrings
 import com.gascanner.app.scan.CARD_ASPECT
 import com.gascanner.app.scan.Candidate
@@ -104,7 +103,6 @@ import com.gascanner.app.scan.loadCapture
 import com.gascanner.app.scan.rarityLabel
 import com.gascanner.app.scan.toCapture
 import com.gascanner.app.scan.toUprightBitmap
-import com.gascanner.app.ui.common.QuantityStepper
 import com.gascanner.app.ui.common.CardThumb
 import com.gascanner.app.ui.common.CenteredMessage
 import com.gascanner.app.ui.common.ScreenScaffold
@@ -119,6 +117,7 @@ import java.util.concurrent.Executors
 fun ScanScreen(
     onOpenCard: (slug: String, editionUuid: String?) -> Unit,
     onOpenSettings: () -> Unit,
+    onReview: () -> Unit,
 ) {
     val container = appContainer()
     val s = LocalStrings.current
@@ -127,14 +126,11 @@ fun ScanScreen(
     val live by vm.live.collectAsStateWithLifecycle()
     val captureMode by vm.captureMode.collectAsStateWithLifecycle()
     val scanMode by vm.scanMode.collectAsStateWithLifecycle()
-    val target by vm.target.collectAsStateWithLifecycle()
     val autoAdd by vm.autoAdd.collectAsStateWithLifecycle()
     val needsKey by vm.needsApiKey.collectAsStateWithLifecycle()
-    val decks by vm.decks.collectAsStateWithLifecycle()
-    val scanDeckId by vm.scanDeckId.collectAsStateWithLifecycle()
     val scanFoil by vm.scanFoil.collectAsStateWithLifecycle()
-    val copies by vm.copies.collectAsStateWithLifecycle()
-    val autoAddCopies by vm.autoAddCopies.collectAsStateWithLifecycle()
+    val trayCount by vm.trayCount.collectAsStateWithLifecycle()
+    val forDeck by vm.forDeck.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -307,22 +303,16 @@ fun ScanScreen(
                 }
             }
 
-            TargetRow(
-                target = target,
-                onTarget = { vm.setTarget(it) },
+            TrayBar(
                 showAutoAdd = captureMode == CaptureMode.LIVE,
                 autoAdd = autoAdd,
                 onAutoAdd = { vm.setAutoAdd(it) },
-                decks = decks,
-                scanDeckId = scanDeckId,
-                onSelectDeck = { vm.selectDeck(it) },
-                onCreateDeck = { vm.createDeck(it) },
                 scanFoil = scanFoil,
                 onScanFoil = vm::setScanFoil,
-                // With Auto-add, every card gets one copy unless Settings says otherwise.
-                showCopies = !(captureMode == CaptureMode.LIVE && autoAdd && !autoAddCopies),
-                copies = copies,
-                onCopies = vm::setCopies,
+                count = trayCount,
+                forDeck = forDeck,
+                onClearDeck = { vm.clearForDeck() },
+                onReview = onReview,
             )
 
             when (val st = state) {
@@ -366,74 +356,46 @@ fun ScanScreen(
     }
 }
 
+/** Foil / Auto-add switches and the button to the list of scanned cards. */
 @Composable
-private fun TargetRow(
-    target: AddTarget,
-    onTarget: (AddTarget) -> Unit,
+private fun TrayBar(
     showAutoAdd: Boolean,
     autoAdd: Boolean,
     onAutoAdd: (Boolean) -> Unit,
-    decks: List<DeckWithCount>,
-    scanDeckId: Long,
-    onSelectDeck: (Long) -> Unit,
-    onCreateDeck: (String) -> Unit,
     scanFoil: Boolean,
     onScanFoil: (Boolean) -> Unit,
-    showCopies: Boolean,
-    copies: Int,
-    onCopies: (Int) -> Unit,
+    count: Int,
+    forDeck: String?,
+    onClearDeck: () -> Unit,
+    onReview: () -> Unit,
 ) {
     val s = LocalStrings.current
-    var deckMenu by remember { mutableStateOf(false) }
-    var newDeckDialog by remember { mutableStateOf(false) }
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(s.addTo, style = MaterialTheme.typography.labelLarge)
-        listOf(AddTarget.COLLECTION to s.targetCollection, AddTarget.SELL to s.targetSell, AddTarget.BUY to s.targetBuy).forEach { (t, label) ->
-            FilterChip(selected = target == t, onClick = { onTarget(t) }, label = { Text(label) })
-        }
-        Box {
-            val deckName = decks.firstOrNull { it.deck.id == scanDeckId }?.deck?.name
-            FilterChip(
-                selected = target == AddTarget.DECK,
-                onClick = { deckMenu = true },
-                label = { Text(if (target == AddTarget.DECK && deckName != null) "${s.targetDeck}: $deckName" else s.targetDeck, maxLines = 1) },
-                trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) },
-            )
-            DropdownMenu(expanded = deckMenu, onDismissRequest = { deckMenu = false }) {
-                decks.forEach { d ->
-                    DropdownMenuItem(
-                        text = { Text("${d.deck.name} (${d.cardCount})") },
-                        onClick = { deckMenu = false; onSelectDeck(d.deck.id) },
-                    )
-                }
-                DropdownMenuItem(text = { Text(s.newDeckEllipsis) }, onClick = { deckMenu = false; newDeckDialog = true })
+    Column(Modifier.fillMaxWidth()) {
+        if (forDeck != null) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                SmallNote(s.scanningForDeck(forDeck), Modifier.weight(1f))
+                TextButton(onClick = onClearDeck) { Text(s.cancel) }
             }
         }
-        FilterChip(selected = scanFoil, onClick = { onScanFoil(!scanFoil) }, label = { Text(s.scanAsFoil) })
-        if (showCopies) {
-            Spacer(Modifier.width(6.dp))
-            Text(s.copies, style = MaterialTheme.typography.labelLarge)
-            QuantityStepper(copies, onChange = { onCopies(copies + it) })
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FilterChip(selected = scanFoil, onClick = { onScanFoil(!scanFoil) }, label = { Text(s.scanAsFoil) })
+                if (showAutoAdd) {
+                    Text(s.autoAdd, style = MaterialTheme.typography.labelLarge)
+                    Switch(checked = autoAdd, onCheckedChange = onAutoAdd)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onReview) {
+                Icon(Icons.Default.Checklist, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(s.scannedCount(count))
+            }
         }
-        if (showAutoAdd) {
-            Spacer(Modifier.width(6.dp))
-            Text(s.autoAdd, style = MaterialTheme.typography.labelLarge)
-            Switch(checked = autoAdd, onCheckedChange = onAutoAdd)
-        }
-    }
-    if (newDeckDialog) {
-        var name by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { newDeckDialog = false },
-            title = { Text(s.newDeck) },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text(s.deckName) }) },
-            confirmButton = { TextButton(onClick = { newDeckDialog = false; onCreateDeck(name) }) { Text(s.save) } },
-            dismissButton = { TextButton(onClick = { newDeckDialog = false }) { Text(s.cancel) } },
-        )
     }
 }
 
