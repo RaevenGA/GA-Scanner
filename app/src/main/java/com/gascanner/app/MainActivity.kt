@@ -82,12 +82,15 @@ private object Routes {
     const val SETTINGS = "settings"
     const val COMPARE = "collection/compare"
     const val DECK = "decks/deck/{deckId}"
+    const val DECK_FROM_COLLECTION = "decks/deck/{deckId}/from-collection"
+    const val SCAN_REVIEW = "scan/review"
 
     fun cardPattern(tab: String) = "$tab/card/{slug}?edition={edition}"
     fun card(tab: String, slug: String, editionUuid: String?): String =
         "$tab/card/${Uri.encode(slug)}" + (editionUuid?.let { "?edition=${Uri.encode(it)}" } ?: "")
 
     fun deck(id: Long) = "decks/deck/$id"
+    fun deckFromCollection(id: Long) = "decks/deck/$id/from-collection"
 }
 
 private data class Tab(val graph: String, val label: (Strings) -> String, val icon: ImageVector)
@@ -131,7 +134,14 @@ private fun AppRoot() {
             }
             navigation(startDestination = Routes.SCAN, route = Routes.TAB_SCAN) {
                 composable(Routes.SCAN) {
-                    ScanScreen(onOpenCard = openCard(Routes.SCAN), onOpenSettings = { nav.switchTab(Routes.TAB_SETTINGS) })
+                    ScanScreen(
+                        onOpenCard = openCard(Routes.SCAN),
+                        onOpenSettings = { nav.switchTab(Routes.TAB_SETTINGS) },
+                        onReview = { nav.navigate(Routes.SCAN_REVIEW) },
+                    )
+                }
+                composable(Routes.SCAN_REVIEW) {
+                    com.gascanner.app.ui.scan.ReviewScreen(onBack = { nav.popBackStack() }, onOpenCard = openCard(Routes.SCAN))
                 }
                 cardScreen(nav, Routes.SCAN)
             }
@@ -151,7 +161,16 @@ private fun AppRoot() {
                         deckId = entry.arguments?.getLong("deckId") ?: 0L,
                         onBack = { nav.popBackStack() },
                         onOpenCard = openCard(Routes.DECKS),
-                        onAddCards = { nav.switchTab(Routes.TAB_SEARCH) },
+                        onSearchCards = { nav.switchTab(Routes.TAB_SEARCH) },
+                        onScanCards = { nav.switchTab(Routes.TAB_SCAN) },
+                        onFromCollection = { nav.navigate(Routes.deckFromCollection(entry.arguments?.getLong("deckId") ?: 0L)) },
+                    )
+                }
+                composable(Routes.DECK_FROM_COLLECTION, arguments = listOf(navArgument("deckId") { type = NavType.LongType })) { entry ->
+                    com.gascanner.app.ui.decks.FromCollectionScreen(
+                        deckId = entry.arguments?.getLong("deckId") ?: 0L,
+                        onBack = { nav.popBackStack() },
+                        onOpenCard = openCard(Routes.DECKS),
                     )
                 }
                 cardScreen(nav, Routes.DECKS)
