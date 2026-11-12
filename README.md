@@ -37,7 +37,7 @@ Languages: English · Polski · Deutsch · Français · Español
 - **Search** by name, by a keyword from the rules text (*taunt*, *floating memory*) or by champion (*Arisanna*).
 - **Filters**: set, element, class (Warrior, Ranger, Tamer…), type and subtype (Human, Beast, Sword, Spell…).
 - **Not owned** shows only cards you don't have yet; one tap adds a card to *Want to buy*.
-- Card pages show elements as coloured badges and speed as **Fast** or **Slow**.
+- Card pages show the official element icons and the speed symbol (red **Fast**, blue **Slow**).
 - **Browse a whole set** in collector-number order. List or card images, 2 or 3 per row.
 
 ### Collection, trade lists and decks

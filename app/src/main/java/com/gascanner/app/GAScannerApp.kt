@@ -73,7 +73,10 @@ class GAScannerApp : Application(), coil.ImageLoaderFactory {
     /** Card images come from the saved offline copies whenever they exist. */
     override fun newImageLoader(): coil.ImageLoader =
         coil.ImageLoader.Builder(this)
-            .components { add(com.gascanner.app.data.images.OfflineImageInterceptor(container.images)) }
+            .components {
+                add(com.gascanner.app.data.images.OfflineImageInterceptor(container.images))
+                add(coil.decode.SvgDecoder.Factory())
+            }
             .crossfade(true)
             .build()
 }

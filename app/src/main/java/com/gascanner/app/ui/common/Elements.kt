@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,19 +44,33 @@ fun elementColor(element: String): Color = when (element.uppercase()) {
 /** "FIRE" → "Fire". */
 fun prettyName(raw: String): String = raw.lowercase().split(' ', '_').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 
+/** Official element icon from the Grand Archive site (kept in the image cache once loaded). */
+fun elementIconUrl(element: String): String = "https://cdn2.gatcg.com/i/elements/${element.lowercase()}.png"
+
+/** Official speed symbol; tinted red for fast and blue for slow, as on the cards. */
+const val SPEED_ICON_URL = "https://cdn2.gatcg.com/i/effects/thunder.svg"
+
+/** The element's official icon; a coloured dot while it loads or when offline. */
 @Composable
-fun ElementDot(element: String, size: Dp = 10.dp) {
-    Box(
-        Modifier.size(size).background(elementColor(element), CircleShape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape)
-    )
+fun ElementDot(element: String, size: Dp = 14.dp) {
+    val painter = coil.compose.rememberAsyncImagePainter(elementIconUrl(element))
+    val loaded = painter.state is coil.compose.AsyncImagePainter.State.Success
+    Box(Modifier.size(size)) {
+        if (!loaded) {
+            Box(
+                Modifier.matchParentSize().background(elementColor(element), CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape)
+            )
+        }
+        androidx.compose.foundation.Image(painter, contentDescription = prettyName(element), modifier = Modifier.matchParentSize())
+    }
 }
 
 /** Coloured dot with the element's name. */
 @Composable
 fun ElementBadge(element: String, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        ElementDot(element)
+        ElementDot(element, 20.dp)
         Spacer(Modifier.width(4.dp))
         Text(prettyName(element), style = MaterialTheme.typography.bodyMedium)
     }
@@ -79,14 +92,20 @@ fun speedLabel(s: Strings, speed: JsonElement?): String? = isFastSpeed(speed)?.l
 @Composable
 fun SpeedBadge(speed: JsonElement?, s: Strings, modifier: Modifier = Modifier) {
     val fast = isFastSpeed(speed) ?: return
+    val tint = if (fast) Color(0xFFD32F2F) else Color(0xFF1E88E5)
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            if (fast) Icons.Default.Bolt else Icons.Default.HourglassBottom,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = if (fast) Color(0xFFFFB300) else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(2.dp))
+        val painter = coil.compose.rememberAsyncImagePainter(SPEED_ICON_URL)
+        if (painter.state is coil.compose.AsyncImagePainter.State.Error) {
+            Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp), tint = tint)
+        } else {
+            androidx.compose.foundation.Image(
+                painter,
+                contentDescription = null,
+                modifier = Modifier.size(width = 11.dp, height = 16.dp),
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
+            )
+        }
+        Spacer(Modifier.width(4.dp))
         Text(if (fast) s.speedFast else s.speedSlow, style = MaterialTheme.typography.bodyMedium)
     }
 }

@@ -281,7 +281,7 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
                             selected = el in elementFilter,
                             onClick = { elementFilter = if (el in elementFilter) elementFilter - el else elementFilter + el },
                             label = { Text(prettyName(el)) },
-                            leadingIcon = { ElementDot(el) },
+                            leadingIcon = { ElementDot(el, 18.dp) },
                         )
                     }
                     if (allElements.isNotEmpty() && allClasses.isNotEmpty()) VerticalDivider(Modifier.height(24.dp))
@@ -395,7 +395,7 @@ private fun ListRow(r: EntryRow, onOpen: () -> Unit, onChange: (Int) -> Unit, on
         Column(Modifier.weight(1f)) {
             Text(r.name, style = MaterialTheme.typography.titleSmall)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                r.elements.forEach { ElementDot(it, 8.dp); Spacer(Modifier.width(3.dp)) }
+                r.elements.forEach { ElementDot(it, 14.dp); Spacer(Modifier.width(3.dp)) }
                 if (r.elements.isNotEmpty()) Spacer(Modifier.width(3.dp))
                 SmallNote(listOf(r.setLine, if (r.foil) s.foil else "").filter { it.isNotBlank() }.joinToString(" · "))
             }
