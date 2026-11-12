@@ -210,12 +210,18 @@ private fun CardDetailContent(
         }
         item {
             Text(card.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                listOf(card.elementLabel, card.classes.joinToString(" "), card.types.joinToString(" "), card.subtypes.joinToString(" "))
-                    .filter { it.isNotBlank() }.joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                card.elements.ifEmpty { listOfNotNull(card.element) }.forEach { el ->
+                    com.gascanner.app.ui.common.ElementBadge(el)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    listOf(card.classes.joinToString(" "), card.types.joinToString(" "), card.subtypes.joinToString(" "))
+                        .filter { it.isNotBlank() }.joinToString(" · ") { com.gascanner.app.ui.common.prettyName(it) },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             val stats = listOfNotNull(
                 card.cost?.let { cost ->
                     cost.value.asText()?.let {
@@ -231,9 +237,14 @@ private fun CardDetailContent(
                 card.power.asText()?.let { "${s.statPower} $it" },
                 card.life.asText()?.let { "${s.statLife} $it" },
                 card.durability.asText()?.let { "${s.statDurability} $it" },
-                card.speed.asText()?.let { "${s.statSpeed} $it" },
             )
-            if (stats.isNotEmpty()) Text(stats.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (stats.isNotEmpty()) Text(stats.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium)
+                if (com.gascanner.app.ui.common.isFastSpeed(card.speed) != null) {
+                    if (stats.isNotEmpty()) Text("  ·  ", style = MaterialTheme.typography.bodyMedium)
+                    com.gascanner.app.ui.common.SpeedBadge(card.speed, s)
+                }
+            }
         }
         val effect = edition?.effectRaw.asText() ?: card.effectRaw.asText()
         if (!effect.isNullOrBlank()) {

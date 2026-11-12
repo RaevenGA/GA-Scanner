@@ -426,3 +426,12 @@ class SideboardPointsTest {
         assertEquals(15, DeckValidator.check(GameFormat.STANDARD, (1..5).map { dc("ch$it") }, info).sideboardPoints)
     }
 }
+
+class SpeedTest {
+    @Test fun speedValues() {
+        assertEquals(true, com.gascanner.app.ui.common.isFastSpeed(JsonPrimitive(true)))
+        assertEquals(false, com.gascanner.app.ui.common.isFastSpeed(JsonPrimitive(false)))
+        assertEquals(true, com.gascanner.app.ui.common.isFastSpeed(JsonPrimitive("Fast")))
+        assertNull(com.gascanner.app.ui.common.isFastSpeed(null))
+    }
+}
