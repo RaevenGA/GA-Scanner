@@ -1,5 +1,12 @@
 package com.gascanner.app.ui.collection
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.VerticalDivider
+import com.gascanner.app.ui.common.ElementDot
+import com.gascanner.app.ui.common.prettyName
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,6 +101,10 @@ private data class EntryRow(
     val search: String,
     val trade: TradeEntry? = null,
     val owned: com.gascanner.app.data.db.CollectionEntry? = null,
+    val elements: List<String> = emptyList(),
+    val classes: List<String> = emptyList(),
+    /** Newer first for "Recent". */
+    val addedAt: Long = 0,
 )
 
 @Composable
@@ -109,6 +120,11 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
     val valuation by vm.valuation.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val failures by vm.importFailures.collectAsStateWithLifecycle()
+    val info by vm.info.collectAsStateWithLifecycle()
+    var sort by rememberSaveable { mutableStateOf(CollectionSort.RECENT) }
+    var sortMenu by remember { mutableStateOf(false) }
+    var elementFilter by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var classFilter by rememberSaveable { mutableStateOf(setOf<String>()) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -154,6 +170,7 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
                 setLine = "${it.setPrefix} ${it.collectorNumber}".trim(), imageUrl = it.imageUrl, foil = it.foil,
                 quantity = it.quantity, price = valuation.perCopy[priceKey(it.editionUuid, it.foil)], ownPrice = false,
                 note = "", search = "${it.cardName} ${it.setPrefix} ${it.setName}", owned = it,
+                elements = info[it.cardSlug].elementList(), classes = info[it.cardSlug]?.classes.orEmpty(), addedAt = it.addedAt,
             )
         }
         ListTab.SELL, ListTab.BUY -> (if (tab == ListTab.SELL) sell else buy).map {
@@ -163,10 +180,17 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
                 setLine = "${it.setPrefix} ${it.collectorNumber}".trim(), imageUrl = it.imageUrl, foil = it.foil,
                 quantity = it.quantity, price = own ?: valuation.perCopy[priceKey(it.editionUuid, it.foil)],
                 ownPrice = own != null, note = it.note, search = "${it.cardName} ${it.setPrefix} ${it.setName} ${it.note}", trade = it,
+                elements = info[it.cardSlug].elementList(), classes = info[it.cardSlug]?.classes.orEmpty(), addedAt = it.id,
             )
         }
     }
-    val shown = rows.filter { filter.isBlank() || it.search.contains(filter, ignoreCase = true) }
+    val allElements = rows.flatMap { it.elements }.distinct().sortedBy { ELEMENT_ORDER.indexOf(it.uppercase()).let { i -> if (i < 0) 99 else i } }
+    val allClasses = rows.flatMap { it.classes }.distinct().sorted()
+    val shown = rows
+        .filter { filter.isBlank() || it.search.contains(filter, ignoreCase = true) }
+        .filter { elementFilter.isEmpty() || it.elements.any { e -> e in elementFilter } }
+        .filter { classFilter.isEmpty() || it.classes.any { c -> c in classFilter } }
+        .let { list -> sortRows(list, sort) }
     val totalCards = rows.sumOf { it.quantity }
     val priced = rows.filter { it.price != null }
     val total = priced.sumOf { r -> if (r.price!!.currency == valuation.currency) r.price.amount * r.quantity else 0.0 }
@@ -175,6 +199,18 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
         title = s.collectionTitle,
         snackbarHostState = snackbar,
         actions = {
+            Box {
+                IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, s.sortBy) }
+                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    CollectionSort.entries.forEach { o ->
+                        DropdownMenuItem(
+                            text = { Text(sortLabel(s, o)) },
+                            leadingIcon = { if (o == sort) Icon(Icons.Default.Check, null) },
+                            onClick = { sort = o; sortMenu = false },
+                        )
+                    }
+                }
+            }
             ViewModeButton(viewMode, vm::setViewMode)
             if (tab != ListTab.OWNED) {
                 IconButton(onClick = { share(if (tab == ListTab.SELL) TradeListType.SELL else TradeListType.BUY) }, enabled = rows.isNotEmpty()) {
@@ -234,6 +270,34 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
+            if (allElements.size + allClasses.size > 1) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    allElements.forEach { el ->
+                        FilterChip(
+                            selected = el in elementFilter,
+                            onClick = { elementFilter = if (el in elementFilter) elementFilter - el else elementFilter + el },
+                            label = { Text(prettyName(el)) },
+                            leadingIcon = { ElementDot(el) },
+                        )
+                    }
+                    if (allElements.isNotEmpty() && allClasses.isNotEmpty()) VerticalDivider(Modifier.height(24.dp))
+                    allClasses.forEach { cl ->
+                        FilterChip(
+                            selected = cl in classFilter,
+                            onClick = { classFilter = if (cl in classFilter) classFilter - cl else classFilter + cl },
+                            label = { Text(prettyName(cl)) },
+                        )
+                    }
+                    if (elementFilter.isNotEmpty() || classFilter.isNotEmpty()) {
+                        TextButton(onClick = { elementFilter = emptySet(); classFilter = emptySet() }) { Text(s.clear) }
+                    }
+                }
+                if (shown.size != rows.size) SmallNote(s.showingOf(shown.sumOf { it.quantity }, totalCards), Modifier.padding(horizontal = 16.dp))
+            }
             if (viewMode == ViewMode.LIST) {
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(shown, key = { it.key }) { r ->
@@ -330,7 +394,11 @@ private fun ListRow(r: EntryRow, onOpen: () -> Unit, onChange: (Int) -> Unit, on
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(r.name, style = MaterialTheme.typography.titleSmall)
-            SmallNote(listOf(r.setLine, if (r.foil) s.foil else "").filter { it.isNotBlank() }.joinToString(" · "))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                r.elements.forEach { ElementDot(it, 8.dp); Spacer(Modifier.width(3.dp)) }
+                if (r.elements.isNotEmpty()) Spacer(Modifier.width(3.dp))
+                SmallNote(listOf(r.setLine, if (r.foil) s.foil else "").filter { it.isNotBlank() }.joinToString(" · "))
+            }
             val priceText = r.price?.let { (if (r.ownPrice) "" else "≈ ") + it.format() }
             val line = listOfNotNull(priceText, r.note.ifBlank { null }).joinToString(" · ")
             if (line.isNotBlank()) {
@@ -382,4 +450,34 @@ private fun TradePriceDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
     )
+}
+
+private val ELEMENT_ORDER = listOf("NORM", "FIRE", "WATER", "WIND", "ARCANE", "ASTRA", "CRUX", "LUXEM", "UMBRA", "EXIA", "NEOS", "TERA")
+
+private fun com.gascanner.app.data.api.CardDto?.elementList(): List<String> =
+    this?.elements?.ifEmpty { listOfNotNull(element) }.orEmpty()
+
+private fun sortRows(rows: List<EntryRow>, sort: CollectionSort): List<EntryRow> = when (sort) {
+    CollectionSort.RECENT -> rows.sortedByDescending { it.addedAt }
+    CollectionSort.NAME -> rows.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+    CollectionSort.ELEMENT -> rows.sortedWith(
+        compareBy<EntryRow> { r -> r.elements.minOfOrNull { e -> ELEMENT_ORDER.indexOf(e.uppercase()).let { if (it < 0) 99 else it } } ?: 100 }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+    )
+    CollectionSort.CLASS -> rows.sortedWith(
+        compareBy<EntryRow> { it.classes.firstOrNull() ?: "\uFFFF" }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+    )
+    CollectionSort.SET -> rows.sortedWith(compareBy<EntryRow> { it.setLine.substringBefore(' ') }.thenBy {
+        it.setLine.substringAfterLast(' ').filter(Char::isDigit).toIntOrNull() ?: Int.MAX_VALUE
+    })
+    CollectionSort.VALUE -> rows.sortedByDescending { it.price?.amount ?: -1.0 }
+}
+
+private fun sortLabel(s: com.gascanner.app.i18n.Strings, o: CollectionSort): String = when (o) {
+    CollectionSort.RECENT -> s.sortRecent
+    CollectionSort.NAME -> s.sortName
+    CollectionSort.ELEMENT -> s.sortElement
+    CollectionSort.CLASS -> s.sortClass
+    CollectionSort.SET -> s.sortSet
+    CollectionSort.VALUE -> s.sortValue
 }

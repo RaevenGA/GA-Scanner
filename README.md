@@ -37,10 +37,12 @@ Languages: English · Polski · Deutsch · Français · Español
 - **Search** by name, by a keyword from the rules text (*taunt*, *floating memory*) or by champion (*Arisanna*).
 - **Filters**: set, element, class (Warrior, Ranger, Tamer…), type and subtype (Human, Beast, Sword, Spell…).
 - **Not owned** shows only cards you don't have yet; one tap adds a card to *Want to buy*.
+- Card pages show elements as coloured badges and speed as **Fast** or **Slow**.
 - **Browse a whole set** in collector-number order. List or card images, 2 or 3 per row.
 
 ### Collection, trade lists and decks
 - **Collection** with quantities per printing and foil, total value, and CSV import and export.
+- **Sort** your collection and lists by name, element, class, set and number, value or date added, and **filter** by element and class with one tap.
 - **Want to sell / Want to buy** lists with your own price and a note per card. **Share** creates a
   ready-to-post text for Messenger, Discord or Facebook groups.
 - **Check someone's list**: paste another player's list and see at a glance:

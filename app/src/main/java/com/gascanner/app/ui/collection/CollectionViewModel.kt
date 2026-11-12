@@ -26,6 +26,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** How the collection lists are ordered. */
+enum class CollectionSort { RECENT, NAME, ELEMENT, CLASS, SET, VALUE }
+
 enum class ListTab(val target: AddTarget) { OWNED(AddTarget.COLLECTION), SELL(AddTarget.SELL), BUY(AddTarget.BUY) }
 
 /** Values keyed by "editionUuid|foil", per copy, in [currency]. */
@@ -45,6 +48,10 @@ class CollectionViewModel(private val c: AppContainer) : ViewModel() {
     val sell: StateFlow<List<TradeEntry>> = c.trade.observe(TradeListType.SELL).state(emptyList())
     val buy: StateFlow<List<TradeEntry>> = c.trade.observe(TradeListType.BUY).state(emptyList())
 
+    /** Card details (elements, classes) for everything on the three lists, for sorting and filters. */
+    private val _info = MutableStateFlow<Map<String, com.gascanner.app.data.api.CardDto>>(emptyMap())
+    val info: StateFlow<Map<String, com.gascanner.app.data.api.CardDto>> = _info.asStateFlow()
+
     private val _valuation = MutableStateFlow(Valuation())
     val valuation: StateFlow<Valuation> = _valuation.asStateFlow()
 
@@ -61,6 +68,17 @@ class CollectionViewModel(private val c: AppContainer) : ViewModel() {
     private val s get() = c.strings.value
 
     init {
+        viewModelScope.launch {
+            combine(owned, sell, buy) { o, sl, b -> (o.map { it.cardSlug } + (sl + b).map { it.cardSlug }).toSet() }
+                .debounce(200)
+                .collectLatest { slugs ->
+                    val missing = slugs - _info.value.keys
+                    if (missing.isNotEmpty()) {
+                        val found = runCatching { c.cards.cardsBySlug(missing) }.getOrDefault(emptyMap())
+                        _info.value = _info.value + found
+                    }
+                }
+        }
         viewModelScope.launch {
             combine(owned, sell, buy, c.settings.settings) { o, sl, b, _ -> Triple(o, sl, b) }
                 .debounce(300)
