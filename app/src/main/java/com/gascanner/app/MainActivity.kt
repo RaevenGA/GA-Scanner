@@ -81,6 +81,8 @@ private object Routes {
     const val DECKS = "decks"
     const val SETTINGS = "settings"
     const val COMPARE = "collection/compare"
+    const val TRADE = "collection/trade"
+    const val TRADE_CODE = "collection/trade/code"
     const val DECK = "decks/deck/{deckId}"
     const val DECK_FROM_COLLECTION = "decks/deck/{deckId}/from-collection"
     const val SCAN_REVIEW = "scan/review"
@@ -147,7 +149,32 @@ private fun AppRoot() {
             }
             navigation(startDestination = Routes.COLLECTION, route = Routes.TAB_COLLECTION) {
                 composable(Routes.COLLECTION) {
-                    CollectionScreen(onOpenCard = openCard(Routes.COLLECTION), onCompare = { nav.navigate(Routes.COMPARE) })
+                    CollectionScreen(
+                        onOpenCard = openCard(Routes.COLLECTION),
+                        onCompare = { nav.navigate(Routes.COMPARE) },
+                        onTrade = { nav.navigate(Routes.TRADE) },
+                    )
+                }
+                composable(Routes.TRADE) { entry ->
+                    // Result of reading the other player's code, shown as a message.
+                    val codeMessage by entry.savedStateHandle.getStateFlow<String?>("tradeMessage", null).collectAsStateWithLifecycle()
+                    com.gascanner.app.ui.trade.TradeScreen(
+                        onBack = { nav.popBackStack() },
+                        onScan = { nav.switchTab(Routes.TAB_SCAN) },
+                        onScanCode = { nav.navigate(Routes.TRADE_CODE) },
+                        onOpenCard = openCard(Routes.COLLECTION),
+                        message = codeMessage,
+                        onMessageShown = { entry.savedStateHandle["tradeMessage"] = null },
+                    )
+                }
+                composable(Routes.TRADE_CODE) {
+                    com.gascanner.app.ui.trade.TradeCodeScanScreen(
+                        onDone = { msg ->
+                            nav.previousBackStackEntry?.savedStateHandle?.set("tradeMessage", msg)
+                            nav.popBackStack()
+                        },
+                        onBack = { nav.popBackStack() },
+                    )
                 }
                 composable(Routes.COMPARE) {
                     CompareScreen(onBack = { nav.popBackStack() }, onOpenCard = openCard(Routes.COLLECTION))

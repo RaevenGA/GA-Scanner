@@ -161,4 +161,23 @@ class TradeRepository(private val dao: TradeDao) {
         dao.find(type.name, editionUuid, foil)?.let { changeQuantity(it, -count) }
     }
     suspend fun clear(type: TradeListType) = dao.clear(type.name)
+
+    /**
+     * Takes copies off a list after a trade: the same printing and finish first, then the same
+     * printing in the other finish, then any printing of the card. Returns how many were removed.
+     */
+    suspend fun removeCopies(type: TradeListType, cardSlug: String, editionUuid: String, foil: Boolean, count: Int): Int {
+        var left = count
+        val all = dao.all(type.name)
+        val order = all.filter { it.editionUuid == editionUuid && it.foil == foil } +
+            all.filter { it.editionUuid == editionUuid && it.foil != foil } +
+            all.filter { it.cardSlug == cardSlug && it.editionUuid != editionUuid }
+        for (entry in order) {
+            if (left <= 0) break
+            val take = minOf(left, entry.quantity)
+            changeQuantity(entry, -take)
+            left -= take
+        }
+        return count - left
+    }
 }

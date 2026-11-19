@@ -204,13 +204,15 @@ class ReviewViewModel(private val c: AppContainer) : ViewModel() {
                 AddTarget.SELL -> c.trade.add(TradeListType.SELL, card, edition, i.foil, i.quantity)
                 AddTarget.BUY -> c.trade.add(TradeListType.BUY, card, edition, i.foil, i.quantity)
                 AddTarget.DECK -> c.decks.addCard(deckId, defaultSection(card), card, edition, i.quantity, i.foil)
+                AddTarget.TRADE_GIVE -> c.deal.add(com.gascanner.app.data.deal.DealSide.GIVE, card, edition, i.foil, i.quantity)
+                AddTarget.TRADE_GET -> c.deal.add(com.gascanner.app.data.deal.DealSide.GET, card, edition, i.foil, i.quantity)
             }
             if (alsoCollection && t.target != AddTarget.COLLECTION) c.collection.add(card, edition, i.foil, i.quantity)
             c.tray.setQuantity(i, 0)
             sent += i.quantity
         }
         // Scanning for a deck ends here; the next scan defaults to the collection again.
-        if (t.target == AddTarget.DECK) c.settings.setScanTarget(AddTarget.COLLECTION)
+        if (t.target in setOf(AddTarget.DECK, AddTarget.TRADE_GIVE, AddTarget.TRADE_GET)) c.settings.setScanTarget(AddTarget.COLLECTION)
         val where = targetName(s, t.copy(deckName = decks.value.firstOrNull { it.deck.id == deckId }?.deck?.name ?: t.deckName))
         _messages.tryEmit(
             s.sentScanned(sent, where) + (if (alsoCollection && t.target != AddTarget.COLLECTION) " " + s.alsoInCollection else "") +
@@ -233,6 +235,8 @@ fun targetName(s: Strings, t: ReviewTarget): String = when (t.target) {
     AddTarget.SELL -> s.targetSell
     AddTarget.BUY -> s.targetBuy
     AddTarget.DECK -> t.deckName?.let { "${s.targetDeck}: $it" } ?: s.targetDeck
+    AddTarget.TRADE_GIVE -> "${s.tradeTitle}: ${s.tradeIGive}"
+    AddTarget.TRADE_GET -> "${s.tradeTitle}: ${s.tradeIGet}"
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -382,6 +386,9 @@ private fun TargetChips(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(s.addTo, style = MaterialTheme.typography.labelLarge)
+        if (target.target == AddTarget.TRADE_GIVE || target.target == AddTarget.TRADE_GET) {
+            FilterChip(selected = true, onClick = {}, label = { Text(targetName(s, target)) })
+        }
         listOf(AddTarget.COLLECTION to s.targetCollection, AddTarget.SELL to s.targetSell, AddTarget.BUY to s.targetBuy).forEach { (t, label) ->
             FilterChip(selected = target.target == t, onClick = { onTarget(t) }, label = { Text(label) })
         }

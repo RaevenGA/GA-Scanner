@@ -14,8 +14,8 @@ android {
         applicationId = "com.gascanner.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.6.1"
+        versionCode = 14
+        versionName = "0.7.0"
 
         // Phones only (ARM); leaves out emulator libraries to keep the APK small.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
@@ -95,6 +95,10 @@ dependencies {
 
     // Free on-device text recognition (model bundled in the APK, works offline)
     implementation("com.google.mlkit:text-recognition:16.0.1")
+
+    // Trade QR codes: drawn with ZXing, read with ML Kit (both work offline)
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     // Network + images
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

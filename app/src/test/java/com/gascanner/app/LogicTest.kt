@@ -435,3 +435,35 @@ class SpeedTest {
         assertNull(com.gascanner.app.ui.common.isFastSpeed(null))
     }
 }
+
+class DealCodeTest {
+    private fun line(i: Int, foil: Boolean = false, qty: Int = 1) =
+        com.gascanner.app.data.deal.CodeLine("ed${i.toString().padStart(8, 'x')}", foil, qty)
+
+    @Test fun roundTripOneCode() {
+        val lines = listOf(line(1), line(2, foil = true, qty = 3))
+        val codes = com.gascanner.app.data.deal.DealCode.encode(lines, id = "abcd")
+        assertEquals(1, codes.size)
+        val part = com.gascanner.app.data.deal.DealCode.parse(codes[0])!!
+        assertEquals(lines, part.lines)
+        assertEquals(1, part.count)
+    }
+
+    @Test fun longSideIsSplitAndCollected() {
+        val lines = (1..150).map { line(it, foil = it % 3 == 0, qty = it % 4 + 1) }
+        val codes = com.gascanner.app.data.deal.DealCode.encode(lines, id = "wxyz")
+        assertTrue(codes.size > 1)
+        assertTrue(codes.all { it.length < com.gascanner.app.data.deal.DealCode.PART_SIZE + 30 })
+        val collector = com.gascanner.app.data.deal.DealCodeCollector()
+        // Scanned out of order and with a repeat.
+        codes.reversed().forEach { collector.add(com.gascanner.app.data.deal.DealCode.parse(it)!!) }
+        assertFalse(collector.add(com.gascanner.app.data.deal.DealCode.parse(codes[0])!!))
+        assertTrue(collector.complete)
+        assertEquals(lines, collector.lines())
+    }
+
+    @Test fun rejectsOtherCodes() {
+        assertNull(com.gascanner.app.data.deal.DealCode.parse("https://example.com"))
+        assertNull(com.gascanner.app.data.deal.DealCode.parse("GAT1|3/2|abcd|x.1"))
+    }
+}

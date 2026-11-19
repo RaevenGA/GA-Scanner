@@ -144,7 +144,11 @@ data class PriceSourceConfig(
 enum class ViewMode(val columns: Int) { LIST(1), GRID2(2), GRID3(3) }
 
 /** Where scanned cards are added. */
-enum class AddTarget { COLLECTION, SELL, BUY, DECK }
+enum class AddTarget {
+    COLLECTION, SELL, BUY, DECK,
+    /** The trade in progress: cards I give / cards I get. */
+    TRADE_GIVE, TRADE_GET,
+}
 
 data class AppSettings(
     val language: String = "system",

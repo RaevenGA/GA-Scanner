@@ -94,7 +94,12 @@ class ScanViewModel(private val c: AppContainer) : ViewModel() {
 
     /** Deck the cards are being scanned for (from a deck's "Scan cards"), shown above the list button. */
     val forDeck: StateFlow<String?> = combine(c.settings.settings, c.decks.decks) { st, decks ->
-        if (st.scanTarget == AddTarget.DECK) decks.firstOrNull { it.deck.id == st.scanDeckId }?.deck?.name else null
+        when (st.scanTarget) {
+            AddTarget.DECK -> decks.firstOrNull { it.deck.id == st.scanDeckId }?.deck?.name?.let { "${s.targetDeck}: $it" }
+            AddTarget.TRADE_GIVE -> "${s.tradeTitle}: ${s.tradeIGive}"
+            AddTarget.TRADE_GET -> "${s.tradeTitle}: ${s.tradeIGet}"
+            else -> null
+        }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     // ---------- Photo & multi ----------
