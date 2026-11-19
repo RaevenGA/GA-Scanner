@@ -373,7 +373,7 @@ private fun TrayBar(
     Column(Modifier.fillMaxWidth()) {
         if (forDeck != null) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                SmallNote(s.scanningForDeck(forDeck), Modifier.weight(1f))
+                SmallNote(s.scanningFor(forDeck), Modifier.weight(1f))
                 TextButton(onClick = onClearDeck) { Text(s.cancel) }
             }
         }

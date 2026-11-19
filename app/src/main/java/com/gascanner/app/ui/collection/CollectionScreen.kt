@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -108,7 +109,7 @@ private data class EntryRow(
 )
 
 @Composable
-fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, onCompare: () -> Unit) {
+fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, onCompare: () -> Unit, onTrade: () -> Unit = {}) {
     val container = appContainer()
     val s = LocalStrings.current
     val vm: CollectionViewModel = viewModel { CollectionViewModel(container) }
@@ -220,6 +221,7 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
             IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, s.more) }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(text = { Text(s.compareTitle) }, onClick = { menuOpen = false; onCompare() })
+                DropdownMenuItem(text = { Text(s.tradeTitle) }, onClick = { menuOpen = false; onTrade() })
                 DropdownMenuItem(text = { Text(s.updatePrices) }, onClick = { menuOpen = false; vm.updatePrices() })
                 DropdownMenuItem(text = { Text(s.exportCsv) }, onClick = { menuOpen = false; exportLauncher.launch(vm.exportFileName()) })
                 DropdownMenuItem(
@@ -240,7 +242,15 @@ fun CollectionScreen(onOpenCard: (slug: String, editionUuid: String?) -> Unit, o
                 LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             }
             if (tab != ListTab.OWNED) {
-                TextButton(onClick = onCompare, modifier = Modifier.padding(horizontal = 8.dp)) { Text(s.compareTitle) }
+                Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onCompare) { Text(s.compareTitle) }
+                    Spacer(Modifier.weight(1f))
+                    androidx.compose.material3.FilledTonalButton(onClick = onTrade) {
+                        Icon(Icons.Default.SwapHoriz, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(s.tradeTitle)
+                    }
+                }
             }
             if (rows.isEmpty()) {
                 CenteredMessage(

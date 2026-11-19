@@ -142,6 +142,11 @@ class AppContainer(context: Context) {
     private val scanDb: com.gascanner.app.data.scan.ScanDatabase =
         Room.databaseBuilder(context, com.gascanner.app.data.scan.ScanDatabase::class.java, "ga_scan.db").build()
     val tray = com.gascanner.app.data.scan.ScanTray(scanDb.items())
+
+    // The trade in progress (both sides).
+    private val dealDb: com.gascanner.app.data.deal.DealDatabase =
+        Room.databaseBuilder(context, com.gascanner.app.data.deal.DealDatabase::class.java, "ga_deal.db").build()
+    val deal = com.gascanner.app.data.deal.DealRepository(dealDb.items())
     val importExport = ImportExport(cards, collection, trade)
     val images = com.gascanner.app.data.images.ImageStore(context, http)
     val updates = com.gascanner.app.data.update.UpdateChecker(http, json)

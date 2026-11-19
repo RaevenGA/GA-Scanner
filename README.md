@@ -45,6 +45,10 @@ Languages: English · Polski · Deutsch · Français · Español
 - **Sort** your collection and lists by name, element, class, set and number, value or date added, and **filter** by element and class with one tap.
 - **Want to sell / Want to buy** lists with your own price and a note per card. **Share** creates a
   ready-to-post text for Messenger, Discord or Facebook groups.
+- **Trade** (button in Want to sell / Want to buy): put the cards you give and get on two sides and see both values and the difference in your default shop's prices.
+  - Add cards from your lists or collection, by scanning or by searching.
+  - **Trade codes**: show your side as a QR code; the other player scans it with GA Scanner and your cards appear on their "I get" side. No internet or account needed, nothing leaves the two phones. Long lists are split over a few codes.
+  - **Complete trade** can remove the cards you gave from your collection and Want to sell list, and add the cards you got to your collection and take them off Want to buy.
 - **Check someone's list**: paste another player's list and see at a glance:
   - ✅ cards on your list in the same version;
   - 🔄 cards on your list in another version;
